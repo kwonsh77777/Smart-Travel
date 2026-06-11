@@ -293,6 +293,9 @@
     <div id="toastContainer" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-[100] w-full max-w-sm px-4 flex flex-col gap-2 pointer-events-none"></div>
 
     <script>
+        // ✅ [중요] 여기에 앞서 구글 앱스 스크립트에서 배포(Deploy) 후 발급받은 웹 앱 URL을 입력하세요.
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec";
+
         // 에러 감지
         window.onerror = function(message, source, lineno, colno, error) {
             var clockEl = document.getElementById('realtimeClock');
@@ -310,7 +313,6 @@
         };
 
         // 전역 변수
-        var GAS_URL = "https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec"; // 💡 외부 통신용 구글 웹앱 주소
         var exchangeRates = { KRW: 1350, VND: 25000 };
         var customCurrency = { name: "베트남 동 (VND)", symbol: "₫", code: "VND" };
         var currentCurrencyCode = "VND";
@@ -325,7 +327,7 @@
         var recognition = null;
         var isRecognizing = false;
 
-        // 💡 [신규] 갤러리 뷰어 제어 변수
+        // 💡 갤러리 뷰어 제어 변수
         var currentViewerPhotos = [];
         var currentViewerIndex = 0;
 
@@ -339,6 +341,54 @@
             "AUD": { name: "호주 달러 (AUD)", symbol: "A$" }, "CAD": { name: "캐나다 달러 (CAD)", symbol: "C$" },
             "CHF": { name: "스위스 프랑 (CHF)", symbol: "Fr" }, "USD": { name: "미국 달러 (USD)", symbol: "$" }
         };
+
+        // 💡 [신규] 스마트폰 뒤로가기(하드웨어 백버튼) 제어 로직
+        var allowAppExit = false;
+        var backExitTimeout = null;
+
+        window.addEventListener('popstate', function(event) {
+            if (allowAppExit) return;
+
+            // 항상 상태를 하나 추가하여 뒤로가기 트랩 유지
+            history.pushState(null, null, location.href);
+
+            // 1. 갤러리 뷰어가 열려있는 경우
+            if (!document.getElementById('imageViewerModal').classList.contains('hidden')) {
+                closeImageViewer();
+            }
+            // 2. 서버 데이터 불러오기 모달이 열려있는 경우
+            else if (!document.getElementById('serverLoadModal').classList.contains('hidden')) {
+                closeServerLoadModal();
+            }
+            // 3. 저장된 임시내역 모달이 열려있는 경우
+            else if (!document.getElementById('savedModal').classList.contains('hidden')) {
+                closeSavedModal();
+            }
+            // 4. 새로운 여행 시작(초기화) 모달이 열려있는 경우
+            else if (!document.getElementById('newSessionModal').classList.contains('hidden')) {
+                closeNewSessionModal();
+            }
+            // 5. 유저 등록 모달 (무시 - 필수이므로 닫히지 않음)
+            else if (!document.getElementById('userModal').classList.contains('hidden')) {
+                // Do nothing
+            }
+            // 6. 환율 설정 탭이 열려있는 경우 -> 메인 여행이력 탭으로 이동
+            else if (document.getElementById('tab-exchange').classList.contains('active')) {
+                changeTab('history');
+            }
+            // 7. 메인 탭(여행이력)인 경우 -> 더블 탭 이벤트(종료)
+            else {
+                if (backExitTimeout) {
+                    allowAppExit = true;
+                    history.go(-2); // 트랩 상태를 벗어나 실제 앱 이전(종료) 페이지로 이동
+                } else {
+                    showToast("'뒤로' 버튼을 한 번 더 누르면 앱이 종료됩니다.", "info");
+                    backExitTimeout = setTimeout(function() {
+                        backExitTimeout = null;
+                    }, 2000);
+                }
+            }
+        });
 
         function changeTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -443,6 +493,9 @@
                 inputVND.value = Math.round(val * exchangeRates.VND).toLocaleString('en-US');
                 inputKRW.value = Math.round(val * exchangeRates.KRW).toLocaleString('en-US');
             });
+
+            // 💡 [신규] 초기 로드 시 뒤로가기 트랩 활성화
+            history.pushState(null, null, location.href);
         }
         setTimeout(initApp, 100);
 
@@ -518,16 +571,16 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); showToast("환영합니다, " + currentUsername + "님!"); logUserAccess(currentUsername); }, 300);
         }
 
-        async function logUserAccess(name) {
-            try {
-                await fetch(GAS_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "text/plain" },
-                    body: JSON.stringify({ action: "logAccess", username: name })
-                });
-            } catch (err) {
-                console.error("로그 기록 실패", err);
+        // 🟢 API로 수정됨
+        function logUserAccess(name) {
+            if (GAS_URL.includes("여기에")) {
+                console.log("GAS_URL이 설정되지 않아 접속 기록을 로컬에서만 유지합니다.");
+                return;
             }
+            fetch(GAS_URL, {
+                method: "POST",
+                body: JSON.stringify({ action: "logAccess", username: name })
+            }).catch(function(err){ console.error(err); });
         }
 
         async function fetchOnlineRates() {
@@ -645,7 +698,6 @@
             img.src = dataUrl;
         }
 
-        // 💡 [수정] 작성 중인 화면의 첨부 사진 렌더링 시 갤러리 뷰어 오픈
         function renderAttachedPhotos() {
             var container = document.getElementById('photoPreviewContainer'); var countText = document.getElementById('photoCount');
             countText.innerText = attachedPhotos.length + "/" + MAX_PHOTOS;
@@ -694,7 +746,6 @@
             return url;
         }
         
-        // 💡 [수정] 임시 저장 내역 리스트 렌더링 시 갤러리 뷰어 오픈
         function renderSavedCalculations() {
             var listContainer = document.getElementById('savedList');
             document.getElementById('sumCustomLabel').innerText = customCurrency.name;
@@ -738,6 +789,7 @@
         }
         function deleteSavedItem(index) { savedCalculations.splice(index, 1); StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations)); renderSavedCalculations(); }
 
+        // 🟢 API로 수정됨
         async function shareSavedHistory() {
             var unsavedVND = document.getElementById('inputVND').value;
             if (unsavedVND && unsavedVND !== '0') {
@@ -746,7 +798,7 @@
             }
 
             if (savedCalculations.length === 0) { showToast("동기화할 내역이 없습니다.", "error"); return; }
-            if (!GAS_URL || GAS_URL.includes("여기에")) { showToast("웹앱 URL이 설정되지 않았습니다.", "error"); return; }
+            if (GAS_URL.includes("여기에")) { showToast("API URL을 설정해주세요.", "error"); return; }
             
             var btn = document.getElementById('shareBtn'); var originalBtnHtml = btn.innerHTML;
             btn.innerHTML = '<svg class="animate-spin h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 전송중...';
@@ -757,12 +809,15 @@
             for (var i = 0; i < savedCalculations.length; i++) {
                 try {
                     var response = await fetch(GAS_URL, {
-                        method: "POST",
-                        headers: { "Content-Type": "text/plain" },
-                        body: JSON.stringify({ action: "saveSingleTravelRecord", username: currentUsername, record: savedCalculations[i] })
+                        method: 'POST',
+                        body: JSON.stringify({
+                            action: 'saveSingleTravelRecord',
+                            record: savedCalculations[i],
+                            username: currentUsername
+                        })
                     });
-                    var resData = await response.json();
-                    if (resData.status === "SUCCESS") {
+                    var result = await response.json();
+                    if (result.success && result.data === "SUCCESS") {
                         successCount++;
                     } else {
                         failCount++;
@@ -803,9 +858,9 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
         }
 
-        // 💡 [수정] 서버 조회 내역 리스트 렌더링 시 갤러리 뷰어 오픈
-        async function queryServerRecords() {
-            if (!GAS_URL || GAS_URL.includes("여기에")) { showToast("웹앱 URL이 설정되지 않았습니다.", "error"); return; }
+        // 🟢 API로 수정됨
+        function queryServerRecords() {
+            if (GAS_URL.includes("여기에")) { showToast("API URL을 설정해주세요.", "error"); return; }
             
             var start = document.getElementById('serverStartDate').value;
             var end = document.getElementById('serverEndDate').value;
@@ -817,19 +872,19 @@
             resultContainer.innerHTML = '<div class="flex flex-col items-center justify-center py-12 text-gray-500 gap-2"><svg class="animate-spin h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>서버에서 시트를 읽고 있습니다...</span></div>';
             document.getElementById('serverActionBox').classList.add('hidden');
 
-            try {
-                var response = await fetch(GAS_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "text/plain" },
-                    body: JSON.stringify({ action: "fetchServerTravelRecords", startDate: start, endDate: end })
-                });
-                var resData = await response.json();
+            fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'fetchServerTravelRecords',
+                    startDate: start,
+                    endDate: end
+                })
+            })
+            .then(res => res.json())
+            .then(result => {
+                if (!result.success) throw new Error(result.error);
+                var records = result.data;
                 
-                if (resData.status !== "SUCCESS") {
-                    throw new Error(resData.message || "서버 응답 오류");
-                }
-                
-                var records = resData.data;
                 btn.disabled = false;
                 btn.innerHTML = '🔍 구글 시트 데이터 조회';
                 
@@ -859,11 +914,12 @@
                     
                     resultContainer.insertAdjacentHTML('beforeend', '<div class="bg-white p-3 rounded-xl border border-gray-200 mb-2 shadow-sm text-left"><div class="text-[10px] text-emerald-600 font-bold">' + item.date + '</div><div class="text-xs text-gray-700 font-medium mt-1">' + placeText + memoText + '</div>' + photosHTML + '<div class="text-sm font-bold text-gray-900 mt-1.5 flex justify-between"><span>VND ' + parseFloat(item.vnd).toLocaleString() + '</span><span class="text-xs text-gray-400 font-normal">₩' + parseFloat(item.krw).toLocaleString() + '</span></div></div>');
                 });
-            } catch(err) {
+            })
+            .catch(err => {
                 btn.disabled = false;
                 btn.innerHTML = '🔍 구글 시트 데이터 조회';
-                resultContainer.innerHTML = '<div class="text-center py-12 text-red-500 text-sm">조회 에러: ' + err + '</div>';
-            }
+                resultContainer.innerHTML = '<div class="text-center py-12 text-red-500 text-sm">조회 에러: ' + err.message + '</div>';
+            });
         }
 
         function importSelectedServerData() {
@@ -916,7 +972,6 @@
             }, function(){}, { timeout: 5000 });
         }
 
-        // 💡 [신규] 갤러리 모드 뷰어 오픈
         function openGalleryViewer(sourceType, itemIndex, photoIndex) {
             if (sourceType === 'attached') {
                 currentViewerPhotos = attachedPhotos.map(getDisplayImageUrl);
@@ -936,7 +991,6 @@
             setTimeout(function() { modal.classList.remove('opacity-0'); }, 10);
         }
 
-        // 💡 [신규] 갤러리 이미지 및 UI(버튼) 업데이트
         function updateGalleryImage() {
             var img = document.getElementById('viewerImage');
             img.src = currentViewerPhotos[currentViewerIndex];
@@ -956,7 +1010,6 @@
             counter.innerText = (currentViewerIndex + 1) + " / " + currentViewerPhotos.length;
         }
 
-        // 💡 [신규] 이전 사진 이동
         function prevGalleryImage(event) {
             if (event) event.stopPropagation();
             if (currentViewerIndex > 0) {
@@ -965,7 +1018,6 @@
             }
         }
 
-        // 💡 [신규] 다음 사진 이동
         function nextGalleryImage(event) {
             if (event) event.stopPropagation();
             if (currentViewerIndex < currentViewerPhotos.length - 1) {
@@ -974,7 +1026,6 @@
             }
         }
         
-        // 💡 [수정] 뷰어 닫을 때 초기화
         function closeImageViewer() { 
             var modal = document.getElementById('imageViewerModal'); 
             modal.classList.add('opacity-0'); 
