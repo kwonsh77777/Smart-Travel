@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="referrer" content="no-referrer">
     <title>스마트여행이력</title>
+    <link rel="manifest" href="./manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         ::-webkit-scrollbar { width: 0px; background: transparent; }
@@ -24,6 +25,9 @@
             <p class="text-xs text-gray-500 font-medium mt-1">환율일자: <span id="headerLastUpdate" class="text-blue-600 font-bold">없음</span></p>
         </div>
         <div class="flex items-center gap-2">
+            <button onclick="openUserModal()" class="w-10 h-10 flex items-center justify-center bg-white rounded-full shadow-sm hover:shadow-md transition-shadow" title="사용자 변경">
+                <span class="text-lg leading-none" style="transform: translateY(-1px);">👤</span>
+            </button>
             <button onclick="confirmNewSession()" class="w-10 h-10 flex items-center justify-center bg-white rounded-full shadow-sm hover:shadow-md transition-shadow" title="새 여행 시작 (초기화)">
                 <span class="text-lg leading-none" style="transform: translateY(-1px);">♻️</span>
             </button>
@@ -293,9 +297,6 @@
     <div id="toastContainer" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-[100] w-full max-w-sm px-4 flex flex-col gap-2 pointer-events-none"></div>
 
     <script>
-        // ✅ [중요] 여기에 앞서 구글 앱스 스크립트에서 배포(Deploy) 후 발급받은 웹 앱 URL을 입력하세요.
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec";
-
         // 에러 감지
         window.onerror = function(message, source, lineno, colno, error) {
             var clockEl = document.getElementById('realtimeClock');
@@ -312,7 +313,8 @@
             remove: function(key) { try { localStorage.removeItem(key); } catch(e) {} }
         };
 
-        // 전역 변수
+        // 💡 전역 변수: 반드시 아래 "웹앱_URL" 자리에 Apps Script의 새 배포 URL을 넣어주세요!
+        var GAS_URL = "여기에_새로_배포한_웹앱_URL을_붙여넣으세요"; 
         var exchangeRates = { KRW: 1350, VND: 25000 };
         var customCurrency = { name: "베트남 동 (VND)", symbol: "₫", code: "VND" };
         var currentCurrencyCode = "VND";
@@ -327,9 +329,9 @@
         var recognition = null;
         var isRecognizing = false;
 
-        // 💡 갤러리 뷰어 제어 변수
         var currentViewerPhotos = [];
         var currentViewerIndex = 0;
+        var currentTab = 'history';
 
         var currencyMap = {
             "VND": { name: "베트남 동 (VND)", symbol: "₫" }, "JPY": { name: "일본 엔 (JPY)", symbol: "¥" },
@@ -342,55 +344,57 @@
             "CHF": { name: "스위스 프랑 (CHF)", symbol: "Fr" }, "USD": { name: "미국 달러 (USD)", symbol: "$" }
         };
 
-        // 💡 [신규] 스마트폰 뒤로가기(하드웨어 백버튼) 제어 로직
         var allowAppExit = false;
         var backExitTimeout = null;
 
         window.addEventListener('popstate', function(event) {
-            if (allowAppExit) return;
+            var st = event.state;
 
-            // 항상 상태를 하나 추가하여 뒤로가기 트랩 유지
-            history.pushState(null, null, location.href);
-
-            // 1. 갤러리 뷰어가 열려있는 경우
+            if (!document.getElementById('userModal').classList.contains('hidden')) {
+                history.pushState(st, null, location.href); 
+                return;
+            }
+            
             if (!document.getElementById('imageViewerModal').classList.contains('hidden')) {
-                closeImageViewer();
+                closeImageViewer(true);
+                return;
+            } 
+            if (!document.getElementById('serverLoadModal').classList.contains('hidden')) {
+                closeServerLoadModal(true);
+                return;
+            } 
+            if (!document.getElementById('savedModal').classList.contains('hidden')) {
+                closeSavedModal(true);
+                return;
+            } 
+            if (!document.getElementById('newSessionModal').classList.contains('hidden')) {
+                closeNewSessionModal(true);
+                return;
             }
-            // 2. 서버 데이터 불러오기 모달이 열려있는 경우
-            else if (!document.getElementById('serverLoadModal').classList.contains('hidden')) {
-                closeServerLoadModal();
+
+            if (st && st.type === 'tab') {
+                changeTab(st.id, true);
+                return;
             }
-            // 3. 저장된 임시내역 모달이 열려있는 경우
-            else if (!document.getElementById('savedModal').classList.contains('hidden')) {
-                closeSavedModal();
-            }
-            // 4. 새로운 여행 시작(초기화) 모달이 열려있는 경우
-            else if (!document.getElementById('newSessionModal').classList.contains('hidden')) {
-                closeNewSessionModal();
-            }
-            // 5. 유저 등록 모달 (무시 - 필수이므로 닫히지 않음)
-            else if (!document.getElementById('userModal').classList.contains('hidden')) {
-                // Do nothing
-            }
-            // 6. 환율 설정 탭이 열려있는 경우 -> 메인 여행이력 탭으로 이동
-            else if (document.getElementById('tab-exchange').classList.contains('active')) {
-                changeTab('history');
-            }
-            // 7. 메인 탭(여행이력)인 경우 -> 더블 탭 이벤트(종료)
-            else {
-                if (backExitTimeout) {
-                    allowAppExit = true;
-                    history.go(-2); // 트랩 상태를 벗어나 실제 앱 이전(종료) 페이지로 이동
-                } else {
-                    showToast("'뒤로' 버튼을 한 번 더 누르면 앱이 종료됩니다.", "info");
-                    backExitTimeout = setTimeout(function() {
-                        backExitTimeout = null;
-                    }, 2000);
-                }
+
+            if (backExitTimeout) {
+                allowAppExit = true;
+                history.back(); 
+            } else {
+                history.pushState(st || { type: 'tab', id: 'history' }, null, location.href); 
+                showToast("'뒤로' 버튼을 한 번 더 누르면 앱이 종료됩니다.", "info");
+                backExitTimeout = setTimeout(function() {
+                    backExitTimeout = null;
+                }, 2000);
             }
         });
 
-        function changeTab(tabId) {
+        function changeTab(tabId, isPopState) {
+            if (isPopState !== true && currentTab !== tabId) {
+                history.pushState({ type: 'tab', id: tabId }, null, location.href);
+            }
+            currentTab = tabId;
+
             document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
             document.getElementById('tab-' + tabId).classList.add('active');
             
@@ -494,8 +498,7 @@
                 inputKRW.value = Math.round(val * exchangeRates.KRW).toLocaleString('en-US');
             });
 
-            // 💡 [신규] 초기 로드 시 뒤로가기 트랩 활성화
-            history.pushState(null, null, location.href);
+            history.replaceState({ type: 'tab', id: 'history' }, null, location.href);
         }
         setTimeout(initApp, 100);
 
@@ -558,10 +561,12 @@
         }
 
         function openUserModal() {
+            document.getElementById('inputUsername').value = currentUsername || "";
             var modal = document.getElementById('userModal'); var content = document.getElementById('userModalContent');
             modal.classList.remove('hidden'); modal.classList.add('flex');
             setTimeout(function() { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); content.classList.add('scale-100'); }, 10);
         }
+        
         function saveUsername() {
             var name = document.getElementById('inputUsername').value.trim();
             if (!name) { showToast("이름을 입력해주세요.", "error"); return; }
@@ -571,16 +576,17 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); showToast("환영합니다, " + currentUsername + "님!"); logUserAccess(currentUsername); }, 300);
         }
 
-        // 🟢 API로 수정됨
-        function logUserAccess(name) {
-            if (GAS_URL.includes("여기에")) {
-                console.log("GAS_URL이 설정되지 않아 접속 기록을 로컬에서만 유지합니다.");
-                return;
+        async function logUserAccess(name) {
+            if (!GAS_URL || GAS_URL.includes("여기에")) return;
+            try {
+                await fetch(GAS_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "text/plain" },
+                    body: JSON.stringify({ action: "logAccess", username: name })
+                });
+            } catch (err) {
+                console.error("로그 기록 에러: " + err);
             }
-            fetch(GAS_URL, {
-                method: "POST",
-                body: JSON.stringify({ action: "logAccess", username: name })
-            }).catch(function(err){ console.error(err); });
         }
 
         async function fetchOnlineRates() {
@@ -651,6 +657,7 @@
         }
 
         function confirmNewSession() {
+            history.pushState({ type: 'modal', id: 'newSessionModal' }, null, location.href);
             var modal = document.getElementById('newSessionModal'); 
             var content = document.getElementById('newSessionModalContent');
             modal.classList.remove('hidden'); 
@@ -658,7 +665,8 @@
             setTimeout(function() { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); content.classList.add('scale-100'); }, 10);
         }
         
-        function closeNewSessionModal() {
+        function closeNewSessionModal(isPopState) {
+            if (isPopState !== true) { history.back(); return; }
             var modal = document.getElementById('newSessionModal'); var content = document.getElementById('newSessionModalContent');
             modal.classList.add('opacity-0'); content.classList.remove('scale-100'); content.classList.add('scale-95');
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
@@ -723,13 +731,15 @@
         }
 
         function openSavedModal() {
+            history.pushState({ type: 'modal', id: 'savedModal' }, null, location.href);
             renderSavedCalculations();
             var modal = document.getElementById('savedModal'); var content = document.getElementById('savedModalContent');
             modal.classList.remove('hidden'); modal.classList.add('flex');
             setTimeout(function() { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); content.classList.add('scale-100'); }, 10);
         }
         
-        function closeSavedModal() {
+        function closeSavedModal(isPopState) {
+            if (isPopState !== true) { history.back(); return; }
             var modal = document.getElementById('savedModal'); var content = document.getElementById('savedModalContent');
             modal.classList.add('opacity-0'); content.classList.remove('scale-100'); content.classList.add('scale-95');
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
@@ -789,7 +799,6 @@
         }
         function deleteSavedItem(index) { savedCalculations.splice(index, 1); StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations)); renderSavedCalculations(); }
 
-        // 🟢 API로 수정됨
         async function shareSavedHistory() {
             var unsavedVND = document.getElementById('inputVND').value;
             if (unsavedVND && unsavedVND !== '0') {
@@ -798,7 +807,7 @@
             }
 
             if (savedCalculations.length === 0) { showToast("동기화할 내역이 없습니다.", "error"); return; }
-            if (GAS_URL.includes("여기에")) { showToast("API URL을 설정해주세요.", "error"); return; }
+            if (!GAS_URL || GAS_URL.includes("여기에")) { showToast("웹앱 URL이 설정되지 않았습니다. 코드 상단의 GAS_URL을 확인해주세요.", "error"); return; }
             
             var btn = document.getElementById('shareBtn'); var originalBtnHtml = btn.innerHTML;
             btn.innerHTML = '<svg class="animate-spin h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 전송중...';
@@ -809,15 +818,12 @@
             for (var i = 0; i < savedCalculations.length; i++) {
                 try {
                     var response = await fetch(GAS_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            action: 'saveSingleTravelRecord',
-                            record: savedCalculations[i],
-                            username: currentUsername
-                        })
+                        method: "POST",
+                        headers: { "Content-Type": "text/plain" },
+                        body: JSON.stringify({ action: "saveSingleTravelRecord", username: currentUsername, record: savedCalculations[i] })
                     });
-                    var result = await response.json();
-                    if (result.success && result.data === "SUCCESS") {
+                    var resData = await response.json();
+                    if (resData.status === "SUCCESS") {
                         successCount++;
                     } else {
                         failCount++;
@@ -837,6 +843,7 @@
         }
 
         function openServerLoadModal() {
+            history.pushState({ type: 'modal', id: 'serverLoadModal' }, null, location.href);
             var today = new Date().toISOString().split('T')[0];
             document.getElementById('serverStartDate').value = today;
             document.getElementById('serverEndDate').value = today;
@@ -851,16 +858,16 @@
             setTimeout(function() { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); content.classList.add('scale-100'); }, 10);
         }
 
-        function closeServerLoadModal() {
+        function closeServerLoadModal(isPopState) {
+            if (isPopState !== true) { history.back(); return; }
             var modal = document.getElementById('serverLoadModal');
             var content = document.getElementById('serverLoadModalContent');
             modal.classList.add('opacity-0'); content.classList.remove('scale-100'); content.classList.add('scale-95');
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
         }
 
-        // 🟢 API로 수정됨
-        function queryServerRecords() {
-            if (GAS_URL.includes("여기에")) { showToast("API URL을 설정해주세요.", "error"); return; }
+        async function queryServerRecords() {
+            if (!GAS_URL || GAS_URL.includes("여기에")) { showToast("웹앱 URL이 설정되지 않았습니다.", "error"); return; }
             
             var start = document.getElementById('serverStartDate').value;
             var end = document.getElementById('serverEndDate').value;
@@ -872,19 +879,19 @@
             resultContainer.innerHTML = '<div class="flex flex-col items-center justify-center py-12 text-gray-500 gap-2"><svg class="animate-spin h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>서버에서 시트를 읽고 있습니다...</span></div>';
             document.getElementById('serverActionBox').classList.add('hidden');
 
-            fetch(GAS_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    action: 'fetchServerTravelRecords',
-                    startDate: start,
-                    endDate: end
-                })
-            })
-            .then(res => res.json())
-            .then(result => {
-                if (!result.success) throw new Error(result.error);
-                var records = result.data;
+            try {
+                var response = await fetch(GAS_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "text/plain" },
+                    body: JSON.stringify({ action: "fetchServerTravelRecords", startDate: start, endDate: end })
+                });
+                var resData = await response.json();
                 
+                if (resData.status !== "SUCCESS") {
+                    throw new Error(resData.message || "서버 응답 오류");
+                }
+                
+                var records = resData.data;
                 btn.disabled = false;
                 btn.innerHTML = '🔍 구글 시트 데이터 조회';
                 
@@ -914,12 +921,11 @@
                     
                     resultContainer.insertAdjacentHTML('beforeend', '<div class="bg-white p-3 rounded-xl border border-gray-200 mb-2 shadow-sm text-left"><div class="text-[10px] text-emerald-600 font-bold">' + item.date + '</div><div class="text-xs text-gray-700 font-medium mt-1">' + placeText + memoText + '</div>' + photosHTML + '<div class="text-sm font-bold text-gray-900 mt-1.5 flex justify-between"><span>VND ' + parseFloat(item.vnd).toLocaleString() + '</span><span class="text-xs text-gray-400 font-normal">₩' + parseFloat(item.krw).toLocaleString() + '</span></div></div>');
                 });
-            })
-            .catch(err => {
+            } catch(err) {
                 btn.disabled = false;
                 btn.innerHTML = '🔍 구글 시트 데이터 조회';
-                resultContainer.innerHTML = '<div class="text-center py-12 text-red-500 text-sm">조회 에러: ' + err.message + '</div>';
-            });
+                resultContainer.innerHTML = '<div class="text-center py-12 text-red-500 text-sm">조회 에러: ' + err + '</div>';
+            }
         }
 
         function importSelectedServerData() {
@@ -973,6 +979,8 @@
         }
 
         function openGalleryViewer(sourceType, itemIndex, photoIndex) {
+            history.pushState({ type: 'modal', id: 'imageViewerModal' }, null, location.href);
+            
             if (sourceType === 'attached') {
                 currentViewerPhotos = attachedPhotos.map(getDisplayImageUrl);
             } else if (sourceType === 'saved') {
@@ -1026,7 +1034,8 @@
             }
         }
         
-        function closeImageViewer() { 
+        function closeImageViewer(isPopState) { 
+            if (isPopState !== true) { history.back(); return; }
             var modal = document.getElementById('imageViewerModal'); 
             modal.classList.add('opacity-0'); 
             setTimeout(function() { 
