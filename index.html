@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="referrer" content="no-referrer">
     <title>스마트여행이력</title>
-    <link rel="manifest" href="./manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         ::-webkit-scrollbar { width: 0px; background: transparent; }
@@ -219,7 +218,7 @@
                 <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-3 mb-3">
                     <h3 class="text-xs font-bold text-indigo-800 mb-2 flex items-center gap-1.5">파일 백업</h3>
                     <div class="flex gap-2 mb-2">
-                        <input type="text" id="backupFileName" placeholder="파일명 (예: 다낭)" class="flex-1 bg-white border border-indigo-200 rounded-lg p-1.5 text-xs outline-none">
+                        <input type="text" id="backupFileName" oninput="StorageHelper.set('offlineCalc_lastFileName', this.value.trim())" placeholder="파일명 (예: 다낭)" class="flex-1 bg-white border border-indigo-200 rounded-lg p-1.5 text-xs outline-none">
                         <button onclick="exportDataToFile()" class="bg-indigo-600 text-white font-bold py-1.5 px-3 rounded-lg text-xs">저장</button>
                     </div>
                     <input type="file" id="importFileInput" accept="*/*, .txt, .json" class="hidden" onchange="importDataFromFile(event)">
@@ -275,20 +274,15 @@
     </div>
 
     <div id="imageViewerModal" class="fixed inset-0 bg-black bg-opacity-95 hidden items-center justify-center z-[100] p-4 transition-opacity duration-300 opacity-0 cursor-pointer select-none" onclick="closeImageViewer()">
-        <button onclick="closeImageViewer()" class="absolute top-4 right-4 text-white hover:text-gray-300 z-20 p-2">
+        <button onclick="closeImageViewer()" class="absolute top-4 right-4 text-white hover:text-gray-300 z-10 p-2">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
         </button>
-        
-        <div id="viewerCounter" class="absolute top-5 left-1/2 transform -translate-x-1/2 text-white font-bold text-sm bg-black bg-opacity-50 px-3 py-1 rounded-full z-20">
-            1 / 1
-        </div>
-        
+        <div id="viewerCounter" class="absolute top-5 left-1/2 transform -translate-x-1/2 text-white font-bold text-sm bg-black bg-opacity-50 px-3 py-1 rounded-full z-20">1 / 1</div>
         <img id="viewerImage" src="" class="max-w-full max-h-[85vh] object-contain rounded z-10" onclick="event.stopPropagation()">
         
         <button id="viewerPrevBtn" onclick="prevGalleryImage(event)" class="absolute left-2 top-1/2 transform -translate-y-1/2 text-white bg-black bg-opacity-60 hover:bg-opacity-80 rounded-full p-2 z-20 hidden items-center justify-center shadow-lg">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
         </button>
-        
         <button id="viewerNextBtn" onclick="nextGalleryImage(event)" class="absolute right-2 top-1/2 transform -translate-y-1/2 text-white bg-black bg-opacity-60 hover:bg-opacity-80 rounded-full p-2 z-20 hidden items-center justify-center shadow-lg">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
         </button>
@@ -313,8 +307,7 @@
             remove: function(key) { try { localStorage.removeItem(key); } catch(e) {} }
         };
 
-        // 💡 전역 변수: 반드시 아래 "웹앱_URL" 자리에 Apps Script의 새 배포 URL을 넣어주세요!
-        var GAS_URL = "여기에_새로_배포한_웹앱_URL을_붙여넣으세요"; 
+        // 전역 변수
         var exchangeRates = { KRW: 1350, VND: 25000 };
         var customCurrency = { name: "베트남 동 (VND)", symbol: "₫", code: "VND" };
         var currentCurrencyCode = "VND";
@@ -329,9 +322,10 @@
         var recognition = null;
         var isRecognizing = false;
 
+        // 갤러리 뷰어 제어 변수
         var currentViewerPhotos = [];
         var currentViewerIndex = 0;
-        var currentTab = 'history';
+        var currentTab = 'history'; 
 
         var currencyMap = {
             "VND": { name: "베트남 동 (VND)", symbol: "₫" }, "JPY": { name: "일본 엔 (JPY)", symbol: "¥" },
@@ -356,36 +350,28 @@
             }
             
             if (!document.getElementById('imageViewerModal').classList.contains('hidden')) {
-                closeImageViewer(true);
-                return;
+                closeImageViewer(true); return;
             } 
             if (!document.getElementById('serverLoadModal').classList.contains('hidden')) {
-                closeServerLoadModal(true);
-                return;
+                closeServerLoadModal(true); return;
             } 
             if (!document.getElementById('savedModal').classList.contains('hidden')) {
-                closeSavedModal(true);
-                return;
+                closeSavedModal(true); return;
             } 
             if (!document.getElementById('newSessionModal').classList.contains('hidden')) {
-                closeNewSessionModal(true);
-                return;
+                closeNewSessionModal(true); return;
             }
 
             if (st && st.type === 'tab') {
-                changeTab(st.id, true);
-                return;
+                changeTab(st.id, true); return;
             }
 
             if (backExitTimeout) {
-                allowAppExit = true;
-                history.back(); 
+                allowAppExit = true; history.back(); 
             } else {
                 history.pushState(st || { type: 'tab', id: 'history' }, null, location.href); 
                 showToast("'뒤로' 버튼을 한 번 더 누르면 앱이 종료됩니다.", "info");
-                backExitTimeout = setTimeout(function() {
-                    backExitTimeout = null;
-                }, 2000);
+                backExitTimeout = setTimeout(function() { backExitTimeout = null; }, 2000);
             }
         });
 
@@ -446,6 +432,12 @@
                 lastUpdatedText = storedUpdateText;
                 document.getElementById('headerLastUpdate').innerText = lastUpdatedText;
                 document.getElementById('lastUpdateText').innerText = "최근 업데이트: " + lastUpdatedText;
+            }
+
+            // 💡 [수정] 앱 구동 시 가장 마지막에 저장했던 파일 백업명 불러와서 세팅
+            var storedFileName = StorageHelper.get('offlineCalc_lastFileName');
+            if (storedFileName) {
+                document.getElementById('backupFileName').value = storedFileName;
             }
 
             populateCurrencySelect();
@@ -550,14 +542,10 @@
 
         function toggleSpeechRecognition() {
             if (!recognition) {
-                showToast("현재 브라우저는 음성 입력을 지원하지 않습니다 (크롬, 사파리 앱 등을 권장합니다).", "error");
-                return;
+                showToast("현재 브라우저는 음성 입력을 지원하지 않습니다.", "error"); return;
             }
-            if (isRecognizing) {
-                recognition.stop();
-            } else {
-                recognition.start();
-            }
+            if (isRecognizing) recognition.stop();
+            else recognition.start();
         }
 
         function openUserModal() {
@@ -576,16 +564,9 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); showToast("환영합니다, " + currentUsername + "님!"); logUserAccess(currentUsername); }, 300);
         }
 
-        async function logUserAccess(name) {
-            if (!GAS_URL || GAS_URL.includes("여기에")) return;
-            try {
-                await fetch(GAS_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "text/plain" },
-                    body: JSON.stringify({ action: "logAccess", username: name })
-                });
-            } catch (err) {
-                console.error("로그 기록 에러: " + err);
+        function logUserAccess(name) {
+            if (typeof google !== 'undefined' && google.script && google.script.run) {
+                google.script.run.withFailureHandler(function(err) { console.error("로그 기록 에러: " + err); }).logAccess(name);
             }
         }
 
@@ -660,8 +641,7 @@
             history.pushState({ type: 'modal', id: 'newSessionModal' }, null, location.href);
             var modal = document.getElementById('newSessionModal'); 
             var content = document.getElementById('newSessionModalContent');
-            modal.classList.remove('hidden'); 
-            modal.classList.add('flex');
+            modal.classList.remove('hidden'); modal.classList.add('flex');
             setTimeout(function() { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); content.classList.add('scale-100'); }, 10);
         }
         
@@ -807,7 +787,7 @@
             }
 
             if (savedCalculations.length === 0) { showToast("동기화할 내역이 없습니다.", "error"); return; }
-            if (!GAS_URL || GAS_URL.includes("여기에")) { showToast("웹앱 URL이 설정되지 않았습니다. 코드 상단의 GAS_URL을 확인해주세요.", "error"); return; }
+            if (typeof google === 'undefined' || !google.script) { showToast("서버에 연결할 수 없습니다.", "error"); return; }
             
             var btn = document.getElementById('shareBtn'); var originalBtnHtml = btn.innerHTML;
             btn.innerHTML = '<svg class="animate-spin h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> 전송중...';
@@ -817,17 +797,15 @@
             var successCount = 0; var failCount = 0;
             for (var i = 0; i < savedCalculations.length; i++) {
                 try {
-                    var response = await fetch(GAS_URL, {
-                        method: "POST",
-                        headers: { "Content-Type": "text/plain" },
-                        body: JSON.stringify({ action: "saveSingleTravelRecord", username: currentUsername, record: savedCalculations[i] })
+                    await new Promise(function(resolve, reject) {
+                        google.script.run
+                            .withSuccessHandler(function(res) {
+                                if(res === "SUCCESS") resolve(); else reject();
+                            })
+                            .withFailureHandler(reject)
+                            .saveSingleTravelRecord(savedCalculations[i], currentUsername);
                     });
-                    var resData = await response.json();
-                    if (resData.status === "SUCCESS") {
-                        successCount++;
-                    } else {
-                        failCount++;
-                    }
+                    successCount++;
                 } catch (err) { failCount++; }
             }
             
@@ -866,8 +844,8 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
         }
 
-        async function queryServerRecords() {
-            if (!GAS_URL || GAS_URL.includes("여기에")) { showToast("웹앱 URL이 설정되지 않았습니다.", "error"); return; }
+        function queryServerRecords() {
+            if (typeof google === 'undefined' || !google.script) { showToast("구글 스크립트 환경이 아닙니다.", "error"); return; }
             
             var start = document.getElementById('serverStartDate').value;
             var end = document.getElementById('serverEndDate').value;
@@ -879,53 +857,51 @@
             resultContainer.innerHTML = '<div class="flex flex-col items-center justify-center py-12 text-gray-500 gap-2"><svg class="animate-spin h-6 w-6 text-emerald-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span>서버에서 시트를 읽고 있습니다...</span></div>';
             document.getElementById('serverActionBox').classList.add('hidden');
 
-            try {
-                var response = await fetch(GAS_URL, {
-                    method: "POST",
-                    headers: { "Content-Type": "text/plain" },
-                    body: JSON.stringify({ action: "fetchServerTravelRecords", startDate: start, endDate: end })
-                });
-                var resData = await response.json();
-                
-                if (resData.status !== "SUCCESS") {
-                    throw new Error(resData.message || "서버 응답 오류");
-                }
-                
-                var records = resData.data;
-                btn.disabled = false;
-                btn.innerHTML = '🔍 구글 시트 데이터 조회';
-                
-                if (!records || records.length === 0) {
-                    resultContainer.innerHTML = '<div class="text-center py-12 text-gray-400 text-sm">해당 기간의 구글 시트 내역이 없습니다.</div>';
-                    return;
-                }
-                
-                fetchedServerData = records; 
-                document.getElementById('serverMatchCount').innerText = records.length;
-                document.getElementById('serverActionBox').classList.remove('hidden');
-                
-                resultContainer.innerHTML = '';
-                records.forEach(function(item, i) {
-                    var placeText = item.place ? ' 📍 ' + item.place : '';
-                    var memoText = item.memo ? ' | 📝 ' + item.memo : '';
+            google.script.run
+                .withSuccessHandler(function(resData) {
+                    btn.disabled = false;
+                    btn.innerHTML = '🔍 구글 시트 데이터 조회';
                     
-                    var photosHTML = '';
-                    if (item.photos && item.photos.length > 0) {
-                        photosHTML = '<div class="mt-1.5 flex gap-1 overflow-x-auto pb-1">';
-                        item.photos.forEach(function(p, pIdx) {
-                            var displayUrl = getDisplayImageUrl(p);
-                            photosHTML += '<img src="' + displayUrl + '" class="h-10 w-10 object-cover rounded border border-gray-200 cursor-pointer" onclick="openGalleryViewer(\'server\', ' + i + ', ' + pIdx + ')">';
-                        });
-                        photosHTML += '</div>';
+                    if (resData.status !== "SUCCESS") {
+                        resultContainer.innerHTML = '<div class="text-center py-12 text-red-500 text-sm">조회 에러: ' + (resData.message || "서버 응답 오류") + '</div>';
+                        return;
                     }
                     
-                    resultContainer.insertAdjacentHTML('beforeend', '<div class="bg-white p-3 rounded-xl border border-gray-200 mb-2 shadow-sm text-left"><div class="text-[10px] text-emerald-600 font-bold">' + item.date + '</div><div class="text-xs text-gray-700 font-medium mt-1">' + placeText + memoText + '</div>' + photosHTML + '<div class="text-sm font-bold text-gray-900 mt-1.5 flex justify-between"><span>VND ' + parseFloat(item.vnd).toLocaleString() + '</span><span class="text-xs text-gray-400 font-normal">₩' + parseFloat(item.krw).toLocaleString() + '</span></div></div>');
-                });
-            } catch(err) {
-                btn.disabled = false;
-                btn.innerHTML = '🔍 구글 시트 데이터 조회';
-                resultContainer.innerHTML = '<div class="text-center py-12 text-red-500 text-sm">조회 에러: ' + err + '</div>';
-            }
+                    var records = resData.data;
+                    
+                    if (!records || records.length === 0) {
+                        resultContainer.innerHTML = '<div class="text-center py-12 text-gray-400 text-sm">해당 기간의 구글 시트 내역이 없습니다.</div>';
+                        return;
+                    }
+                    
+                    fetchedServerData = records; 
+                    document.getElementById('serverMatchCount').innerText = records.length;
+                    document.getElementById('serverActionBox').classList.remove('hidden');
+                    
+                    resultContainer.innerHTML = '';
+                    records.forEach(function(item, i) {
+                        var placeText = item.place ? ' 📍 ' + item.place : '';
+                        var memoText = item.memo ? ' | 📝 ' + item.memo : '';
+                        
+                        var photosHTML = '';
+                        if (item.photos && item.photos.length > 0) {
+                            photosHTML = '<div class="mt-1.5 flex gap-1 overflow-x-auto pb-1">';
+                            item.photos.forEach(function(p, pIdx) {
+                                var displayUrl = getDisplayImageUrl(p);
+                                photosHTML += '<img src="' + displayUrl + '" class="h-10 w-10 object-cover rounded border border-gray-200 cursor-pointer" onclick="openGalleryViewer(\'server\', ' + i + ', ' + pIdx + ')">';
+                            });
+                            photosHTML += '</div>';
+                        }
+                        
+                        resultContainer.insertAdjacentHTML('beforeend', '<div class="bg-white p-3 rounded-xl border border-gray-200 mb-2 shadow-sm text-left"><div class="text-[10px] text-emerald-600 font-bold">' + item.date + '</div><div class="text-xs text-gray-700 font-medium mt-1">' + placeText + memoText + '</div>' + photosHTML + '<div class="text-sm font-bold text-gray-900 mt-1.5 flex justify-between"><span>VND ' + parseFloat(item.vnd).toLocaleString() + '</span><span class="text-xs text-gray-400 font-normal">₩' + parseFloat(item.krw).toLocaleString() + '</span></div></div>');
+                    });
+                })
+                .withFailureHandler(function(err) {
+                    btn.disabled = false;
+                    btn.innerHTML = '🔍 구글 시트 데이터 조회';
+                    resultContainer.innerHTML = '<div class="text-center py-12 text-red-500 text-sm">조회 에러: ' + err + '</div>';
+                })
+                .fetchServerTravelRecords(start, end);
         }
 
         function importSelectedServerData() {
