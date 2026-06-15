@@ -2,37 +2,114 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>스마트여행이력</title>
-  
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#4A90E2">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="스마트여행이력">
   
   <style>
-    /* 여백을 완전히 없애고 스크롤 바를 숨겨 진짜 스마트폰 앱 UI 환경 구축 */
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      background-color: #ffffff;
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+      background-color: #f5f7fa; color: #333;
     }
-    
-    /* 구글 배너를 차단하고 주소 입력창 흔적을 숨기는 전체 화면 프레임 */
-    iframe {
-      border: none;
-      width: 100%;
-      height: 100%;
-      display: block;
+    .app-bar {
+      background-color: #4A90E2; color: white;
+      padding: 15px; text-align: center;
+      font-size: 1.2rem; font-weight: bold;
+    }
+    .content-area { padding: 20px; }
+    .action-btn {
+      display: block; width: 100%; padding: 12px;
+      background-color: #4A90E2; color: white;
+      border: none; border-radius: 6px;
+      font-size: 1rem; margin-bottom: 12px; cursor: pointer;
+    }
+    .action-btn:active { background-color: #357ABD; }
+    .status-panel {
+      margin-top: 15px; padding: 12px;
+      background-color: #e3f2fd; border-radius: 4px; font-size: 0.9rem;
     }
   </style>
 </head>
 <body>
 
-  <iframe src="YOUR_GAS_WEBAPP_URL_HERE" allow="geolocation; microphone; camera;"></iframe>
+  <div class="app-bar">스마트여행이력</div>
+  
+  <div class="content-area">
+    <button class="action-btn" onclick="requestLogAccess()">접속 로그 기록 테스트</button>
+    <button class="action-btn" onclick="requestFetchRecords()">실시간 내역 조회 테스트</button>
+    
+    <div id="msgLog" class="status-panel">원격 상태 모니터링 영역</div>
+  </div>
 
+  <script>
+    // ⚠️ [필수 필수] 1단계에서 획득한 본인의 Google Apps Script 웹 앱 URL을 붙여넣으세요.
+    const COMPONENT_API_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL";
+
+    // PWA 서비스 워커 자동 구동 엔진 작동
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(res => console.log('PWA 인프라 활성화 완료:', res.scope))
+          .catch(err => console.log('인프라 구동 실패:', err));
+      });
+    }
+
+    //기존 google.script.run 시스템을 완벽 대체하는 글로벌 통신 함수
+    async function callGasApi(payload) {
+      try {
+        const response = await fetch(COMPONENT_API_URL, {
+          method: 'POST',
+          mode: 'cors',
+          headers: { 'Content-Type': 'text/plain' }, // CORS 충돌 방지 세팅
+          body: JSON.stringify(payload)
+        });
+        return await response.json();
+      } catch (error) {
+        console.error("통신 에러:", error);
+        return { status: "ERROR", message: error.toString() };
+      }
+    }
+
+    // [동작 예시 1] 접속 로그 등록 실행
+    async function requestLogAccess() {
+      const panel = document.getElementById('msgLog');
+      panel.innerText = "서버 통신 중...";
+      
+      const response = await callGasApi({
+        action: 'logAccess',
+        username: '권성환'
+      });
+      
+      if(response.status === 'SUCCESS') {
+        panel.innerText = "성공: 구글 시트 로그인이력 탭에 안전하게 저장되었습니다.";
+      } else {
+        panel.innerText = "오류 발생: " + response.message;
+      }
+    }
+
+    // [동작 예시 2] 데이터 리스트 가져오기 실행
+    async function requestFetchRecords() {
+      const panel = document.getElementById('msgLog');
+      panel.innerText = "데이터 스트리밍 중...";
+      
+      const response = await callGasApi({
+        action: 'fetchServerTravelRecords',
+        startDate: '2026-01-01',
+        endDate: '2026-12-31'
+      });
+      
+      if(response.status === 'SUCCESS') {
+        panel.innerText = `성공: 총 ${response.data.length}건의 데이터를 수신했습니다. (상세 내역은 F12 개발자도구 콘솔 확인)`;
+        console.log("수신 데이터 세부 내용:", response.data);
+      } else {
+        panel.innerText = "오류 발생: " + response.message;
+      }
+    }
+  </script>
 </body>
 </html>
