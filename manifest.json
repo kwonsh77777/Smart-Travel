@@ -3,12 +3,12 @@
   "name": "스마트여행이력",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "Smart_Travel.png",
       "type": "image/png",
       "sizes": "192x192"
     },
     {
-      "src": "icon-512.png",
+      "src": "Smart_Travel.png",
       "type": "image/png",
       "sizes": "512x512"
     }
