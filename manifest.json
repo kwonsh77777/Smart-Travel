@@ -1,23 +1,21 @@
 {
-  "name": "여행이력 및 환율계산기",
-  "short_name": "스마트_여행이력관리",
-  "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
-  "start_url": "./index.html",
+  "short_name": "여행이력",
+  "name": "스마트여행이력",
   "icons": [
     {
-      "src": "./Smart_Travel.png",
-      "sizes": "192x192",
+      "src": "icon-192.png",
       "type": "image/png",
-      "purpose": "any maskable"
+      "sizes": "192x192"
     },
     {
-      "src": "./Smart_Travel.png",
-      "sizes": "512x512",
+      "src": "icon-512.png",
       "type": "image/png",
-      "purpose": "any maskable"
+      "sizes": "512x512"
     }
-  ]
+  ],
+  "start_url": "index.html",
+  "background_color": "#f5f7fa",
+  "theme_color": "#4A90E2",
+  "display": "standalone",
+  "orientation": "portrait"
 }
