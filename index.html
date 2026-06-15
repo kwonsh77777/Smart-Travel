@@ -296,8 +296,9 @@
     <div id="toastContainer" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-[100] w-full max-w-sm px-4 flex flex-col gap-2 pointer-events-none"></div>
 
     <script>
-        // 💡 [추가] 배포된 구글 Apps Script 웹 앱 URL을 여기에 반드시 입력하세요!
-        const GOOGLE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec';
+        // 💡 [필수 수정] 배포된 구글 Apps Script 웹 앱 URL을 여기에 반드시 입력하세요!
+        // 주의: 따옴표(' ') 안에 구글에서 발급받은 실제 주소를 정확히 넣으셔야 합니다.
+        const GOOGLE_APP_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec'; 
 
         // 에러 감지
         window.onerror = function(message, source, lineno, colno, error) {
@@ -588,9 +589,8 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); showToast("환영합니다, " + currentUsername + "님!"); logUserAccess(currentUsername); }, 300);
         }
 
-        // 💡 [변경] google.script.run 대신 fetch()로 API 서버에 POST 요청
         function logUserAccess(name) {
-            if (!GOOGLE_APP_SCRIPT_URL || GOOGLE_APP_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec') return;
+            if (!GOOGLE_APP_SCRIPT_URL || GOOGLE_APP_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec' || GOOGLE_APP_SCRIPT_URL.includes('여기에')) return;
             
             fetch(GOOGLE_APP_SCRIPT_URL, {
                 method: 'POST',
@@ -811,7 +811,6 @@
         }
         function deleteSavedItem(index) { savedCalculations.splice(index, 1); StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations)); renderSavedCalculations(); }
 
-        // 💡 [변경] google.script.run 대신 fetch()로 API 서버에 POST 요청
         async function shareSavedHistory() {
             var unsavedVND = document.getElementById('inputVND').value;
             if (unsavedVND && unsavedVND !== '0') {
@@ -820,7 +819,7 @@
             }
 
             if (savedCalculations.length === 0) { showToast("동기화할 내역이 없습니다.", "error"); return; }
-            if (!GOOGLE_APP_SCRIPT_URL || GOOGLE_APP_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec') { 
+            if (!GOOGLE_APP_SCRIPT_URL || GOOGLE_APP_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec' || GOOGLE_APP_SCRIPT_URL.includes('여기에')) { 
                 showToast("구글 스크립트 URL이 설정되지 않았습니다.", "error"); return; 
             }
             
@@ -882,9 +881,8 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
         }
 
-        // 💡 [변경] google.script.run 대신 fetch()로 API 서버에 POST 요청
         async function queryServerRecords() {
-            if (!GOOGLE_APP_SCRIPT_URL || GOOGLE_APP_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec') {
+            if (!GOOGLE_APP_SCRIPT_URL || GOOGLE_APP_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec' || GOOGLE_APP_SCRIPT_URL.includes('여기에')) {
                 showToast("구글 스크립트 URL이 설정되지 않았습니다.", "error"); return;
             }
             
