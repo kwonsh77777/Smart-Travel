@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="referrer" content="no-referrer">
     <title>스마트여행이력</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="apple-touch-icon" href="Smart_Travel.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         ::-webkit-scrollbar { width: 0px; background: transparent; }
@@ -869,7 +873,6 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
         }
 
-        // 💡 통신 변경: 외부 API로 GET 데이터 요청 (여행 내역 조회)
         function queryServerRecords() {
             if (!SCRIPT_URL || SCRIPT_URL.includes("여기에")) { showToast("소스 코드 상단에 SCRIPT_URL을 설정해야 합니다.", "error"); return; }
             
@@ -1081,6 +1084,15 @@
             };
             reader.readAsText(file);
         }
+
+        // PWA 서비스 워커 등록 코드 추가 부분 시작
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                .catch(err => console.log('서비스 워커 등록 실패:', err));
+            });
+        }
+        // PWA 서비스 워커 등록 코드 추가 부분 끝
     </script>
 </body>
 </html>
