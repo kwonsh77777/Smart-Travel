@@ -300,7 +300,7 @@
     <div id="toastContainer" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-[100] w-full max-w-sm px-4 flex flex-col gap-2 pointer-events-none"></div>
 
     <script>
-        // 💡 [필수 설정] 사용하시던 웹 앱 URL을 꼭 그대로 유지해 주세요!
+        // 💡 [필수 설정] 아래 따옴표 안에 사용하시던 웹 앱 URL을 꼭 그대로 유지해 주세요!
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec";
 
         window.onerror = function(message, source, lineno, colno, error) {
@@ -585,47 +585,16 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); showToast("환영합니다, " + currentUsername + "님!"); logUserAccess(currentUsername); }, 300);
         }
 
-        // 💡 [궁극의 해결책] 브라우저 보안을 100% 우회하는 HTML Form 몰래 전송 방식
-        function sendDataToGoogle(actionName, payload) {
-            return new Promise((resolve) => {
-                var iframeName = 'hidden_iframe_' + Date.now();
-                var iframe = document.createElement('iframe');
-                iframe.name = iframeName;
-                iframe.style.display = 'none';
-                document.body.appendChild(iframe);
-
-                var form = document.createElement('form');
-                form.method = 'POST';
-                form.action = SCRIPT_URL;
-                form.target = iframeName;
-
-                var input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'data';
-                
-                var requestData = { action: actionName };
-                Object.assign(requestData, payload);
-                input.value = JSON.stringify(requestData);
-                
-                form.appendChild(input);
-                document.body.appendChild(form);
-
-                // 구글 서버에 데이터가 도착하고 응답이 오면 완료 처리
-                iframe.onload = function() {
-                    setTimeout(function() {
-                        document.body.removeChild(form);
-                        document.body.removeChild(iframe);
-                        resolve(true); 
-                    }, 500);
-                };
-
-                form.submit();
-            });
-        }
-
+        // 💡 [수정] 통신 에러를 완벽하게 추적할 수 있는 가장 안전한 전송 방식(URLSearchParams)
         function logUserAccess(name) {
             if (!SCRIPT_URL || SCRIPT_URL.includes("여기에")) return;
-            sendDataToGoogle('logAccess', { username: name });
+            const params = new URLSearchParams();
+            params.append('data', JSON.stringify({ action: 'logAccess', username: name }));
+            
+            fetch(SCRIPT_URL, {
+                method: "POST",
+                body: params
+            }).catch(function(err){ console.error("Log Access Error:", err); });
         }
 
         async function fetchOnlineRates() {
@@ -840,7 +809,7 @@
         }
         function deleteSavedItem(index) { savedCalculations.splice(index, 1); StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations)); renderSavedCalculations(); }
 
-        // 💡 [수정] 데이터 동기화에도 폼 전송 방식 적용
+        // 💡 [핵심 수정] 완벽하게 동작하는 URLSearchParams 전송 (에러 내용 표시)
         async function shareSavedHistory() {
             var unsavedVND = document.getElementById('inputVND').value;
             if (unsavedVND && unsavedVND !== '0') {
@@ -856,12 +825,34 @@
             btn.disabled = true; 
             showToast("총 " + savedCalculations.length + "건 전송을 시작합니다.", "info");
             
-            var successCount = 0; var failCount = 0;
+            var successCount = 0; var failCount = 0; var errorMessage = "";
             for (var i = 0; i < savedCalculations.length; i++) {
                 try {
-                    await sendDataToGoogle('saveRecord', { record: savedCalculations[i], username: currentUsername });
-                    successCount++;
-                } catch (err) { failCount++; }
+                    const params = new URLSearchParams();
+                    params.append('data', JSON.stringify({ action: 'saveRecord', record: savedCalculations[i], username: currentUsername }));
+
+                    const res = await fetch(SCRIPT_URL, {
+                        method: "POST",
+                        body: params
+                    });
+                    
+                    const text = await res.text();
+                    try {
+                        const data = JSON.parse(text);
+                        if(data.status === 'success') successCount++;
+                        else { failCount++; errorMessage = data.message || "서버 내부 로직 에러"; }
+                    } catch(e) {
+                        failCount++;
+                        if (text.includes("Sign in") || text.includes("로그인")) errorMessage = "구글 권한 에러 (배포 권한 갱신 필요)";
+                        else if (text.includes("<html")) errorMessage = "서버 옛날 버전 실행 중 (새 배포 갱신 필요)";
+                        else errorMessage = "알 수 없는 응답";
+                        break;
+                    }
+                } catch (err) { 
+                    failCount++; 
+                    errorMessage = "네트워크 차단 에러"; 
+                    break;
+                }
             }
             
             btn.innerHTML = originalBtnHtml; btn.disabled = false;
@@ -871,7 +862,7 @@
                 StorageHelper.remove('offlineCalc_saves'); 
                 renderSavedCalculations(); 
             } else {
-                showToast("⚠️ 전송 에러 발생", "error");
+                showToast("⚠️ 실패 원인: " + errorMessage, "error");
             }
         }
 
@@ -948,8 +939,8 @@
                         resultContainer.insertAdjacentHTML('beforeend', '<div class="bg-white p-3 rounded-xl border border-gray-200 mb-2 shadow-sm text-left"><div class="text-[10px] text-emerald-600 font-bold">' + item.date + '</div><div class="text-xs text-gray-700 font-medium mt-1">' + placeText + memoText + '</div>' + photosHTML + '<div class="text-sm font-bold text-gray-900 mt-1.5 flex justify-between"><span>VND ' + parseFloat(item.vnd).toLocaleString() + '</span><span class="text-xs text-gray-400 font-normal">₩' + parseFloat(item.krw).toLocaleString() + '</span></div></div>');
                     });
                 } catch(e) {
-                    if (text.includes("Sign in") || text.includes("로그인")) throw new Error("구글 권한 에러 (모든 사용자로 배포 필요)");
-                    else if (text.includes("<html")) throw new Error("서버가 옛날 코드를 실행 중 (새 버전 배포 필요)");
+                    if (text.includes("Sign in") || text.includes("로그인")) throw new Error("구글 권한 에러 (배포 권한 갱신 필요)");
+                    else if (text.includes("<html")) throw new Error("서버 옛날 버전 실행 중 (새 배포 갱신 필요)");
                     else throw new Error("데이터 파싱 에러");
                 }
             }).catch(function(err) {
