@@ -300,10 +300,9 @@
     <div id="toastContainer" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-[100] w-full max-w-sm px-4 flex flex-col gap-2 pointer-events-none"></div>
 
     <script>
-        // 💡 [필수 설정] 1단계에서 복사한 '웹 앱 URL'을 아래 따옴표 안에 붙여넣으세요!
+        // 💡 [필수 설정] 아래 따옴표 안에 사용하시던 웹 앱 URL을 꼭 다시 넣어주세요!
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec";
 
-        // 에러 감지
         window.onerror = function(message, source, lineno, colno, error) {
             var clockEl = document.getElementById('realtimeClock');
             if (clockEl) {
@@ -319,7 +318,6 @@
             remove: function(key) { try { localStorage.removeItem(key); } catch(e) {} }
         };
 
-        // 전역 변수
         var exchangeRates = { KRW: 1350, VND: 25000 };
         var customCurrency = { name: "베트남 동 (VND)", symbol: "₫", code: "VND" };
         var currentCurrencyCode = "VND";
@@ -334,7 +332,6 @@
         var recognition = null;
         var isRecognizing = false;
 
-        // 갤러리 뷰어 제어 변수
         var currentViewerPhotos = [];
         var currentViewerIndex = 0;
         var currentTab = 'history';
@@ -588,7 +585,7 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); showToast("환영합니다, " + currentUsername + "님!"); logUserAccess(currentUsername); }, 300);
         }
 
-        // 💡 [수정] 통신 보안 옵션 적용
+        // 💡 [수정] 통신 에러 추적 강화 (로그 접속)
         function logUserAccess(name) {
             if (!SCRIPT_URL || SCRIPT_URL.includes("여기에")) return;
             fetch(SCRIPT_URL, {
@@ -596,7 +593,7 @@
                 method: "POST",
                 headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify({ action: 'logAccess', username: name })
-            }).catch(function(err){ console.error(err); });
+            }).catch(function(err){ console.error("Log Access Error:", err); });
         }
 
         async function fetchOnlineRates() {
@@ -811,7 +808,7 @@
         }
         function deleteSavedItem(index) { savedCalculations.splice(index, 1); StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations)); renderSavedCalculations(); }
 
-        // 💡 [수정] 통신 보안 옵션 적용
+        // 💡 [수정] 통신 에러 추적 강화 (동기화)
         async function shareSavedHistory() {
             var unsavedVND = document.getElementById('inputVND').value;
             if (unsavedVND && unsavedVND !== '0') {
@@ -827,7 +824,7 @@
             btn.disabled = true; 
             showToast("총 " + savedCalculations.length + "건 전송을 시작합니다.", "info");
             
-            var successCount = 0; var failCount = 0;
+            var successCount = 0; var failCount = 0; var errorMessage = "";
             for (var i = 0; i < savedCalculations.length; i++) {
                 try {
                     const res = await fetch(SCRIPT_URL, {
@@ -836,10 +833,24 @@
                         headers: { "Content-Type": "text/plain;charset=utf-8" },
                         body: JSON.stringify({ action: 'saveRecord', record: savedCalculations[i], username: currentUsername })
                     });
-                    const data = await res.json();
-                    if(data.status === 'success') successCount++;
-                    else failCount++;
-                } catch (err) { failCount++; }
+                    
+                    const text = await res.text();
+                    try {
+                        const data = JSON.parse(text);
+                        if(data.status === 'success') successCount++;
+                        else { failCount++; errorMessage = data.message || "서버 로직 에러"; }
+                    } catch(e) {
+                        failCount++;
+                        if (text.includes("Sign in") || text.includes("로그인")) errorMessage = "구글 로그인 에러 (앱스 스크립트 '모든 사용자' 배포 필요)";
+                        else if (text.includes("<html")) errorMessage = "서버가 구버전을 실행 중 ('새 버전' 배포 갱신 필요)";
+                        else errorMessage = "데이터 파싱 에러";
+                        break; 
+                    }
+                } catch (err) { 
+                    failCount++; 
+                    errorMessage = "네트워크/CORS 에러 (앱스 스크립트 배포 설정 확인)"; 
+                    break;
+                }
             }
             
             btn.innerHTML = originalBtnHtml; btn.disabled = false;
@@ -849,7 +860,7 @@
                 StorageHelper.remove('offlineCalc_saves'); 
                 renderSavedCalculations(); 
             } else {
-                showToast("⚠️ 성공: " + successCount + "건, 실패: " + failCount + "건", "error");
+                showToast("⚠️ 실패 원인: " + errorMessage, "error");
             }
         }
 
@@ -877,6 +888,7 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
         }
 
+        // 💡 [수정] 통신 에러 추적 강화 (서버 조회)
         function queryServerRecords() {
             if (!SCRIPT_URL || SCRIPT_URL.includes("여기에")) { showToast("소스 코드 상단에 SCRIPT_URL을 설정해야 합니다.", "error"); return; }
             
@@ -891,43 +903,49 @@
             document.getElementById('serverActionBox').classList.add('hidden');
 
             fetch(`${SCRIPT_URL}?action=fetchRecords&startDate=${start}&endDate=${end}`)
-            .then(res => res.json())
-            .then(response => {
+            .then(res => res.text())
+            .then(text => {
                 btn.disabled = false;
                 btn.innerHTML = '🔍 구글 시트 데이터 조회';
                 
-                if (response.status !== 'success' || !response.data || response.data.length === 0) {
-                    resultContainer.innerHTML = '<div class="text-center py-12 text-gray-400 text-sm">해당 기간의 구글 시트 내역이 없습니다.</div>';
-                    return;
-                }
-                
-                var records = response.data;
-                fetchedServerData = records; 
-                document.getElementById('serverMatchCount').innerText = records.length;
-                document.getElementById('serverActionBox').classList.remove('hidden');
-                
-                resultContainer.innerHTML = '';
-                records.forEach(function(item, i) {
-                    var placeText = item.place ? ' 📍 ' + item.place : '';
-                    var memoText = item.memo ? ' | 📝 ' + item.memo : '';
-                    
-                    var photosHTML = '';
-                    if (item.photos && item.photos.length > 0) {
-                        photosHTML = '<div class="mt-1.5 flex gap-1 overflow-x-auto pb-1">';
-                        item.photos.forEach(function(p, pIdx) {
-                            var displayUrl = getDisplayImageUrl(p);
-                            photosHTML += '<img src="' + displayUrl + '" class="h-10 w-10 object-cover rounded border border-gray-200 cursor-pointer" onclick="openGalleryViewer(\'server\', ' + i + ', ' + pIdx + ')">';
-                        });
-                        photosHTML += '</div>';
+                try {
+                    var response = JSON.parse(text);
+                    if (response.status !== 'success' || !response.data || response.data.length === 0) {
+                        resultContainer.innerHTML = '<div class="text-center py-12 text-gray-400 text-sm">해당 기간의 구글 시트 내역이 없습니다.</div>';
+                        return;
                     }
                     
-                    resultContainer.insertAdjacentHTML('beforeend', '<div class="bg-white p-3 rounded-xl border border-gray-200 mb-2 shadow-sm text-left"><div class="text-[10px] text-emerald-600 font-bold">' + item.date + '</div><div class="text-xs text-gray-700 font-medium mt-1">' + placeText + memoText + '</div>' + photosHTML + '<div class="text-sm font-bold text-gray-900 mt-1.5 flex justify-between"><span>VND ' + parseFloat(item.vnd).toLocaleString() + '</span><span class="text-xs text-gray-400 font-normal">₩' + parseFloat(item.krw).toLocaleString() + '</span></div></div>');
-                });
-                
+                    var records = response.data;
+                    fetchedServerData = records; 
+                    document.getElementById('serverMatchCount').innerText = records.length;
+                    document.getElementById('serverActionBox').classList.remove('hidden');
+                    
+                    resultContainer.innerHTML = '';
+                    records.forEach(function(item, i) {
+                        var placeText = item.place ? ' 📍 ' + item.place : '';
+                        var memoText = item.memo ? ' | 📝 ' + item.memo : '';
+                        
+                        var photosHTML = '';
+                        if (item.photos && item.photos.length > 0) {
+                            photosHTML = '<div class="mt-1.5 flex gap-1 overflow-x-auto pb-1">';
+                            item.photos.forEach(function(p, pIdx) {
+                                var displayUrl = getDisplayImageUrl(p);
+                                photosHTML += '<img src="' + displayUrl + '" class="h-10 w-10 object-cover rounded border border-gray-200 cursor-pointer" onclick="openGalleryViewer(\'server\', ' + i + ', ' + pIdx + ')">';
+                            });
+                            photosHTML += '</div>';
+                        }
+                        
+                        resultContainer.insertAdjacentHTML('beforeend', '<div class="bg-white p-3 rounded-xl border border-gray-200 mb-2 shadow-sm text-left"><div class="text-[10px] text-emerald-600 font-bold">' + item.date + '</div><div class="text-xs text-gray-700 font-medium mt-1">' + placeText + memoText + '</div>' + photosHTML + '<div class="text-sm font-bold text-gray-900 mt-1.5 flex justify-between"><span>VND ' + parseFloat(item.vnd).toLocaleString() + '</span><span class="text-xs text-gray-400 font-normal">₩' + parseFloat(item.krw).toLocaleString() + '</span></div></div>');
+                    });
+                } catch(e) {
+                    if (text.includes("Sign in") || text.includes("로그인")) throw new Error("구글 권한 에러 (모든 사용자로 배포 필요)");
+                    else if (text.includes("<html")) throw new Error("서버가 옛날 코드를 실행 중 (새 버전 배포 필요)");
+                    else throw new Error("데이터 파싱 에러");
+                }
             }).catch(function(err) {
                 btn.disabled = false;
                 btn.innerHTML = '🔍 구글 시트 데이터 조회';
-                resultContainer.innerHTML = '<div class="text-center py-12 text-red-500 text-sm">조회 에러: 통신 실패</div>';
+                resultContainer.innerHTML = '<div class="text-center py-12 text-red-500 text-sm">조회 에러: ' + err.message + '</div>';
             });
         }
 
