@@ -588,11 +588,13 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); showToast("환영합니다, " + currentUsername + "님!"); logUserAccess(currentUsername); }, 300);
         }
 
-        // 💡 통신 변경: 외부 API로 POST 데이터 발송 (로그 기록)
+        // 💡 [수정] 통신 보안 옵션 적용
         function logUserAccess(name) {
             if (!SCRIPT_URL || SCRIPT_URL.includes("여기에")) return;
             fetch(SCRIPT_URL, {
+                redirect: "follow",
                 method: "POST",
+                headers: { "Content-Type": "text/plain;charset=utf-8" },
                 body: JSON.stringify({ action: 'logAccess', username: name })
             }).catch(function(err){ console.error(err); });
         }
@@ -809,7 +811,7 @@
         }
         function deleteSavedItem(index) { savedCalculations.splice(index, 1); StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations)); renderSavedCalculations(); }
 
-        // 💡 통신 변경: 외부 API로 POST 데이터 발송 (여행 내역 저장)
+        // 💡 [수정] 통신 보안 옵션 적용
         async function shareSavedHistory() {
             var unsavedVND = document.getElementById('inputVND').value;
             if (unsavedVND && unsavedVND !== '0') {
@@ -829,7 +831,9 @@
             for (var i = 0; i < savedCalculations.length; i++) {
                 try {
                     const res = await fetch(SCRIPT_URL, {
+                        redirect: "follow",
                         method: "POST",
+                        headers: { "Content-Type": "text/plain;charset=utf-8" },
                         body: JSON.stringify({ action: 'saveRecord', record: savedCalculations[i], username: currentUsername })
                     });
                     const data = await res.json();
@@ -1085,14 +1089,12 @@
             reader.readAsText(file);
         }
 
-        // PWA 서비스 워커 등록 코드 추가 부분 시작
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('./sw.js')
                 .catch(err => console.log('서비스 워커 등록 실패:', err));
             });
         }
-        // PWA 서비스 워커 등록 코드 추가 부분 끝
     </script>
 </body>
 </html>
