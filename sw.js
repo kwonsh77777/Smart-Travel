@@ -1,8 +1,9 @@
-const CACHE_NAME = 'travel-log-v1';
+const CACHE_NAME = 'travel-log-v2'; // 버전을 v2로 올려줍니다!
 const urlsToCache = [
   './',
   './index.html',
-  './manifest.json'
+  './manifest.json',
+  'Smart_Travel.png' // 아이콘 파일도 명시적으로 추가합니다.
 ];
 
 // 설치 시 캐싱
