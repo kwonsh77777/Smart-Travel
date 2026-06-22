@@ -42,7 +42,8 @@
 
     <div onclick="switchToManualClock()" class="w-full max-w-md text-center text-sm font-medium text-gray-500 mb-4 bg-white py-2 rounded-xl shadow-sm border border-gray-100 transition-colors duration-300 cursor-pointer flex items-center justify-center gap-2 relative select-none" title="터치하여 시간 수정">
         <span id="realtimeClock">앱을 시작하는 중... (잠시만 기다려주세요)</span>
-        <input type="datetime-local" id="manualClockInput" class="hidden border-2 border-blue-400 rounded-lg px-2 py-1 text-gray-800 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-blue-100" onchange="applyManualClock(this.value)" onclick="event.stopPropagation()">
+        <input type="datetime-local" id="manualClockInput" class="hidden border-2 border-blue-400 rounded-lg px-2 py-1 text-gray-800 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-blue-100" onclick="event.stopPropagation()">
+        <button id="btnConfirmClock" onclick="saveManualClock(event)" class="hidden bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg px-2.5 py-1 text-xs font-bold transition-colors" onclick="event.stopPropagation()">확인</button>
         <button id="btnResetClock" onclick="resetToRealtimeClock(event)" class="hidden absolute right-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg px-2 py-1 text-xs font-bold transition-colors">🔄 실시간</button>
     </div>
 
@@ -142,7 +143,7 @@
                 <div class="flex gap-2">
                     <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload(event)">
                     <label for="cameraInput" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl transition-colors text-center cursor-pointer text-sm flex items-center justify-center gap-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812-1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                         카메라
                     </label>
                     <input type="file" id="galleryInput" accept="image/*" multiple class="hidden" onchange="handlePhotoUpload(event)">
@@ -432,32 +433,42 @@
             updateClock(); setInterval(updateClock, 1000);
         }
 
+        // 💡 [수정] 수동 모드로 진입 시 이미 지정된 시간이 있다면 불러오고, [확인] 버튼을 노출하도록 보완
         function switchToManualClock() {
-            if (isManualClock) return;
             var clockEl = document.getElementById('realtimeClock');
             var inputEl = document.getElementById('manualClockInput');
-            
-            var now = new Date();
-            var offset = now.getTimezoneOffset() * 60000;
-            var localISOTime = (new Date(now - offset)).toISOString().slice(0, 16);
+            var confirmBtn = document.getElementById('btnConfirmClock');
+            var resetBtn = document.getElementById('btnResetClock');
             
             clockEl.classList.add('hidden');
+            if (resetBtn) resetBtn.classList.add('hidden');
+            
+            var targetDate = isManualClock && manualClockDate ? manualClockDate : new Date();
+            var offset = targetDate.getTimezoneOffset() * 60000;
+            var localISOTime = (new Date(targetDate - offset)).toISOString().slice(0, 16);
+            
             inputEl.value = localISOTime;
             inputEl.classList.remove('hidden');
+            confirmBtn.classList.remove('hidden');
             inputEl.focus();
         }
 
-        function applyManualClock(val) {
+        // 💡 [신설] 사용자가 날짜/시간 입력을 완전히 완료하고 버튼을 누를 때만 파싱하여 수동으로 확정하는 기능
+        function saveManualClock(event) {
+            if (event) event.stopPropagation();
+            var inputEl = document.getElementById('manualClockInput');
+            var clockEl = document.getElementById('realtimeClock');
+            var confirmBtn = document.getElementById('btnConfirmClock');
+            var resetBtn = document.getElementById('btnResetClock');
+            var val = inputEl.value;
+            
             if (!val) {
-                resetToRealtimeClock();
+                resetToRealtimeClock(event);
                 return;
             }
+            
             isManualClock = true;
             manualClockDate = new Date(val);
-            
-            var clockEl = document.getElementById('realtimeClock');
-            var inputEl = document.getElementById('manualClockInput');
-            var resetBtn = document.getElementById('btnResetClock');
             
             var days = ['일', '월', '화', '수', '목', '금', '토'];
             var timeString = manualClockDate.getFullYear() + '.' + String(manualClockDate.getMonth() + 1).padStart(2, '0') + '.' + 
@@ -468,6 +479,7 @@
             clockEl.classList.replace('text-gray-500', 'text-blue-600');
             
             inputEl.classList.add('hidden');
+            confirmBtn.classList.add('hidden');
             clockEl.classList.remove('hidden');
             resetBtn.classList.remove('hidden');
         }
@@ -479,10 +491,12 @@
             
             var clockEl = document.getElementById('realtimeClock');
             var inputEl = document.getElementById('manualClockInput');
+            var confirmBtn = document.getElementById('btnConfirmClock');
             var resetBtn = document.getElementById('btnResetClock');
             
             clockEl.classList.replace('text-blue-600', 'text-gray-500');
-            resetBtn.classList.add('hidden');
+            if (resetBtn) resetBtn.classList.add('hidden');
+            if (confirmBtn) confirmBtn.classList.add('hidden');
             inputEl.classList.add('hidden');
             clockEl.classList.remove('hidden');
         }
@@ -953,7 +967,7 @@
         }
 
         function queryServerRecords() {
-            if (!SCRIPT_URL || SCRIPT_URL.includes("여기에")) { showToast("소스 코드 상단에 SCRIPT_URL을 설정해야 합니다.", "error"); return; }
+            if (!SCRIPT_URL || SCRIPT_URL.includes("여기에")) { showToast("Source 코드 상단 SCRIPT_URL 설정 필요.", "error"); return; }
             
             var start = document.getElementById('serverStartDate').value;
             var end = document.getElementById('serverEndDate').value;
@@ -1170,13 +1184,6 @@
             reader.readAsText(file);
         }
 
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('./sw.js')
-                .catch(err => console.log('서비스 워커 등록 실패:', err));
-            });
-        }
-
         function editSavedItem(index) {
             var item = savedCalculations[index];
             if (!item) return;
@@ -1194,7 +1201,6 @@
             StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations));
 
             closeSavedModal();
-
             changeTab('history');
 
             showToast("내역을 입력창으로 가져왔습니다. 수정 후 다시 저장해 주세요.", "info");
