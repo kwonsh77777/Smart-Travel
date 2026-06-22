@@ -117,7 +117,7 @@
                     <div class="relative flex-1">
                         <input type="text" id="inputPlace" placeholder="위치 확인 중..." class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl py-3 pl-4 pr-10 text-sm font-medium text-gray-800 focus:outline-none focus:border-gray-300 focus:bg-white transition-all">
                         <button onclick="fetchCurrentLocation()" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-blue-500 transition-colors" title="현재 위치 갱신">
-                            <svg xmlns="http://www.w3.org/2000/xl" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" /></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" /></svg>
                         </button>
                     </div>
                     <button onclick="openGoogleMaps(document.getElementById('inputPlace').value)" class="bg-blue-50 text-blue-600 border-2 border-blue-100 hover:bg-blue-100 rounded-xl px-4 text-xl flex items-center justify-center transition-colors shadow-sm" title="구글 지도에서 검색">🗺️</button>
@@ -319,7 +319,6 @@
             remove: function(key) { try { localStorage.removeItem(key); } catch(e) {} }
         };
 
-        // 전역 변수
         var exchangeRates = { KRW: 1350, VND: 25000 };
         var customCurrency = { name: "베트남 동 (VND)", symbol: "₫", code: "VND" };
         var currentCurrencyCode = "VND";
@@ -338,7 +337,6 @@
         var currentViewerIndex = 0;
         var currentTab = 'history';
 
-        // 💡 [추가] 수동 시계 모드를 위한 상태 변수 선언
         var isManualClock = false;
         var manualClockDate = null;
 
@@ -422,7 +420,7 @@
 
         function startRealtimeClock() {
             function updateClock() {
-                if (isManualClock) return; // 💡 [수정] 수동 모드 활성화 시 실시간 덮어쓰기 정지
+                if (isManualClock) return;
                 var now = new Date();
                 var days = ['일', '월', '화', '수', '목', '금', '토'];
                 var timeString = now.getFullYear() + '.' + String(now.getMonth() + 1).padStart(2, '0') + '.' + 
@@ -434,7 +432,6 @@
             updateClock(); setInterval(updateClock, 1000);
         }
 
-        // 💡 [신설] 현재일시 터치 시 수동 datetime 입력창을 띄우는 함수
         function switchToManualClock() {
             if (isManualClock) return;
             var clockEl = document.getElementById('realtimeClock');
@@ -450,7 +447,6 @@
             inputEl.focus();
         }
 
-        // 💡 [신설] 사용자가 임의로 지정한 수동 시간을 상단바에 고정하는 함수
         function applyManualClock(val) {
             if (!val) {
                 resetToRealtimeClock();
@@ -476,7 +472,6 @@
             resetBtn.classList.remove('hidden');
         }
 
-        // 💡 [신설] 수동 제어를 해제하고 다시 현재의 흐르는 실시간 모드로 복원하는 함수
         function resetToRealtimeClock(event) {
             if (event) event.stopPropagation();
             isManualClock = false;
@@ -576,11 +571,9 @@
         }
         setTimeout(initApp, 100);
 
-        // [이하 기존 코드 100% 원본 보존]
         function initSpeechRecognition() {
             var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (SpeechRecognition) {
-                recognition = new Serialization || new webkitSpeechRecognition();
                 recognition = new SpeechRecognition();
                 recognition.continuous = false; 
                 recognition.interimResults = false;
@@ -708,7 +701,6 @@
             }
         }
 
-        // [기존 함수 유지]
         function handleCurrencyChange() {
             var select = document.getElementById('settingCurrencySelect');
             document.getElementById('settingPreviewSymbol').innerText = currencyMap[select.value].symbol;
@@ -793,14 +785,12 @@
         }
         function removePhoto(index) { attachedPhotos.splice(index, 1); renderAttachedPhotos(); }
 
-        // [기존 함수 갱신 처리]
         function saveCurrentCalculation() {
             var valVND = document.getElementById('inputVND').value || '0'; 
             var valKRW = document.getElementById('inputKRW').value || '0'; 
             var valUSD = document.getElementById('inputUSD').value || '0';
             var place = document.getElementById('inputPlace').value.trim(); var memo = document.getElementById('inputMemo').value.trim();
             
-            // 💡 [수정] 수동 고정 시간이 존재한다면 수동 지정 시간을 반영, 없으면 현재 실시간 시각 적용
             var now = isManualClock && manualClockDate ? manualClockDate : new Date(); 
             var dateStr = now.getFullYear() + '.' + String(now.getMonth() + 1).padStart(2, '0') + '.' + String(now.getDate()).padStart(2, '0') + ' ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
             
@@ -1187,30 +1177,24 @@
             });
         }
 
-        // 💡 [신설] 임시저장 내역 더블클릭 시 입력 폼으로 데이터를 채우고 팝업을 닫는 함수
         function editSavedItem(index) {
             var item = savedCalculations[index];
             if (!item) return;
 
-            // 1. 전면 입력 필드에 기존 임시저장 데이터 로드 (0값은 공백 처리)
             document.getElementById('inputVND').value = item.vnd === '0' ? '' : item.vnd;
             document.getElementById('inputKRW').value = item.krw === '0' ? '' : item.krw;
             document.getElementById('inputUSD').value = item.usd === '0' ? '' : item.usd;
             document.getElementById('inputPlace').value = item.place === '장소 미입력 (더블클릭하여 수정)' ? '' : item.place;
             document.getElementById('inputMemo').value = item.memo;
             
-            // 사진 리스트 복원 및 렌더링
             attachedPhotos = JSON.parse(JSON.stringify(item.photos || []));
             renderAttachedPhotos();
 
-            // 2. 수정 모드로 꺼내왔으므로 기존 임시 목록에서는 중복 낭비를 없애기 위해 제거
             savedCalculations.splice(index, 1);
             StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations));
 
-            // 3. 임시내역 모달 창 닫기 (히스토리 역추적 유도)
             closeSavedModal();
 
-            // 4. 여행이력 메인 탭 화면 활성화
             changeTab('history');
 
             showToast("내역을 입력창으로 가져왔습니다. 수정 후 다시 저장해 주세요.", "info");
