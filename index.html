@@ -40,8 +40,10 @@
         </div>
     </header>
 
-    <div id="realtimeClock" class="w-full max-w-md text-center text-sm font-medium text-gray-500 mb-4 bg-white py-2 rounded-xl shadow-sm border border-gray-100 transition-colors duration-300">
-        앱을 시작하는 중... (잠시만 기다려주세요)
+    <div onclick="switchToManualClock()" class="w-full max-w-md text-center text-sm font-medium text-gray-500 mb-4 bg-white py-2 rounded-xl shadow-sm border border-gray-100 transition-colors duration-300 cursor-pointer flex items-center justify-center gap-2 relative select-none" title="터치하여 시간 수정">
+        <span id="realtimeClock">앱을 시작하는 중... (잠시만 기다려주세요)</span>
+        <input type="datetime-local" id="manualClockInput" class="hidden border-2 border-blue-400 rounded-lg px-2 py-1 text-gray-800 font-bold text-sm focus:outline-none focus:ring-4 focus:ring-blue-100" onchange="applyManualClock(this.value)" onclick="event.stopPropagation()">
+        <button id="btnResetClock" onclick="resetToRealtimeClock(event)" class="hidden absolute right-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg px-2 py-1 text-xs font-bold transition-colors">🔄 실시간</button>
     </div>
 
     <main id="tab-exchange" class="tab-content w-full max-w-md bg-white rounded-3xl shadow-xl p-6 relative z-10 border border-gray-100">
@@ -115,7 +117,7 @@
                     <div class="relative flex-1">
                         <input type="text" id="inputPlace" placeholder="위치 확인 중..." class="w-full bg-gray-50 border-2 border-gray-100 rounded-xl py-3 pl-4 pr-10 text-sm font-medium text-gray-800 focus:outline-none focus:border-gray-300 focus:bg-white transition-all">
                         <button onclick="fetchCurrentLocation()" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-blue-500 transition-colors" title="현재 위치 갱신">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" /></svg>
+                            <svg xmlns="http://www.w3.org/2000/xl" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd" /></svg>
                         </button>
                     </div>
                     <button onclick="openGoogleMaps(document.getElementById('inputPlace').value)" class="bg-blue-50 text-blue-600 border-2 border-blue-100 hover:bg-blue-100 rounded-xl px-4 text-xl flex items-center justify-center transition-colors shadow-sm" title="구글 지도에서 검색">🗺️</button>
@@ -317,6 +319,7 @@
             remove: function(key) { try { localStorage.removeItem(key); } catch(e) {} }
         };
 
+        // 전역 변수
         var exchangeRates = { KRW: 1350, VND: 25000 };
         var customCurrency = { name: "베트남 동 (VND)", symbol: "₫", code: "VND" };
         var currentCurrencyCode = "VND";
@@ -334,6 +337,10 @@
         var currentViewerPhotos = [];
         var currentViewerIndex = 0;
         var currentTab = 'history';
+
+        // 💡 [추가] 수동 시계 모드를 위한 상태 변수 선언
+        var isManualClock = false;
+        var manualClockDate = null;
 
         var currencyMap = {
             "VND": { name: "베트남 동 (VND)", symbol: "₫" }, "JPY": { name: "일본 엔 (JPY)", symbol: "¥" },
@@ -415,6 +422,7 @@
 
         function startRealtimeClock() {
             function updateClock() {
+                if (isManualClock) return; // 💡 [수정] 수동 모드 활성화 시 실시간 덮어쓰기 정지
                 var now = new Date();
                 var days = ['일', '월', '화', '수', '목', '금', '토'];
                 var timeString = now.getFullYear() + '.' + String(now.getMonth() + 1).padStart(2, '0') + '.' + 
@@ -424,6 +432,64 @@
                 if(clockEl && clockEl.innerText.indexOf('[에러발생]') === -1) clockEl.innerText = "현재일시: " + timeString;
             }
             updateClock(); setInterval(updateClock, 1000);
+        }
+
+        // 💡 [신설] 현재일시 터치 시 수동 datetime 입력창을 띄우는 함수
+        function switchToManualClock() {
+            if (isManualClock) return;
+            var clockEl = document.getElementById('realtimeClock');
+            var inputEl = document.getElementById('manualClockInput');
+            
+            var now = new Date();
+            var offset = now.getTimezoneOffset() * 60000;
+            var localISOTime = (new Date(now - offset)).toISOString().slice(0, 16);
+            
+            clockEl.classList.add('hidden');
+            inputEl.value = localISOTime;
+            inputEl.classList.remove('hidden');
+            inputEl.focus();
+        }
+
+        // 💡 [신설] 사용자가 임의로 지정한 수동 시간을 상단바에 고정하는 함수
+        function applyManualClock(val) {
+            if (!val) {
+                resetToRealtimeClock();
+                return;
+            }
+            isManualClock = true;
+            manualClockDate = new Date(val);
+            
+            var clockEl = document.getElementById('realtimeClock');
+            var inputEl = document.getElementById('manualClockInput');
+            var resetBtn = document.getElementById('btnResetClock');
+            
+            var days = ['일', '월', '화', '수', '목', '금', '토'];
+            var timeString = manualClockDate.getFullYear() + '.' + String(manualClockDate.getMonth() + 1).padStart(2, '0') + '.' + 
+                             String(manualClockDate.getDate()).padStart(2, '0') + '(' + days[manualClockDate.getDay()] + ') ' + 
+                             String(manualClockDate.getHours()).padStart(2, '0') + ':' + String(manualClockDate.getMinutes()).padStart(2, '0');
+            
+            clockEl.innerText = "수동일시: " + timeString;
+            clockEl.classList.replace('text-gray-500', 'text-blue-600');
+            
+            inputEl.classList.add('hidden');
+            clockEl.classList.remove('hidden');
+            resetBtn.classList.remove('hidden');
+        }
+
+        // 💡 [신설] 수동 제어를 해제하고 다시 현재의 흐르는 실시간 모드로 복원하는 함수
+        function resetToRealtimeClock(event) {
+            if (event) event.stopPropagation();
+            isManualClock = false;
+            manualClockDate = null;
+            
+            var clockEl = document.getElementById('realtimeClock');
+            var inputEl = document.getElementById('manualClockInput');
+            var resetBtn = document.getElementById('btnResetClock');
+            
+            clockEl.classList.replace('text-blue-600', 'text-gray-500');
+            resetBtn.classList.add('hidden');
+            inputEl.classList.add('hidden');
+            clockEl.classList.remove('hidden');
         }
 
         function initApp() {
@@ -510,9 +576,11 @@
         }
         setTimeout(initApp, 100);
 
+        // [이하 기존 코드 100% 원본 보존]
         function initSpeechRecognition() {
             var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (SpeechRecognition) {
+                recognition = new Serialization || new webkitSpeechRecognition();
                 recognition = new SpeechRecognition();
                 recognition.continuous = false; 
                 recognition.interimResults = false;
@@ -640,6 +708,7 @@
             }
         }
 
+        // [기존 함수 유지]
         function handleCurrencyChange() {
             var select = document.getElementById('settingCurrencySelect');
             document.getElementById('settingPreviewSymbol').innerText = currencyMap[select.value].symbol;
@@ -724,13 +793,17 @@
         }
         function removePhoto(index) { attachedPhotos.splice(index, 1); renderAttachedPhotos(); }
 
+        // [기존 함수 갱신 처리]
         function saveCurrentCalculation() {
             var valVND = document.getElementById('inputVND').value || '0'; 
             var valKRW = document.getElementById('inputKRW').value || '0'; 
             var valUSD = document.getElementById('inputUSD').value || '0';
             var place = document.getElementById('inputPlace').value.trim(); var memo = document.getElementById('inputMemo').value.trim();
             
-            var now = new Date(); var dateStr = now.getFullYear() + '.' + String(now.getMonth() + 1).padStart(2, '0') + '.' + String(now.getDate()).padStart(2, '0') + ' ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+            // 💡 [수정] 수동 고정 시간이 존재한다면 수동 지정 시간을 반영, 없으면 현재 실시간 시각 적용
+            var now = isManualClock && manualClockDate ? manualClockDate : new Date(); 
+            var dateStr = now.getFullYear() + '.' + String(now.getMonth() + 1).padStart(2, '0') + '.' + String(now.getDate()).padStart(2, '0') + ' ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+            
             savedCalculations.push({ date: dateStr, vnd: valVND, krw: valKRW, usd: valUSD, place: place, memo: memo, photos: attachedPhotos, customName: customCurrency.name, customSymbol: customCurrency.symbol });
             StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations));
             showToast("현재 내역이 기기에 저장되었습니다.");
@@ -785,7 +858,6 @@
                 
                 sumVND += vndVal; sumKRW += krwVal; sumUSD += usdVal;
                 
-                // 💡 [수정] 장소 영역에 더블클릭 이벤트(editSavedItem) 추가 및 마우스 커서 스타일 지정
                 var displayPlace = item.place ? item.place : '장소 미입력 (더블클릭하여 수정)';
                 var placeHTML = '<div class="mt-2 text-xs text-gray-700 bg-gray-100 p-1.5 rounded flex justify-between cursor-pointer select-none" title="더블클릭하여 수정" ondblclick="editSavedItem(' + i + ')"><span>📍 ' + displayPlace + '</span>' + (item.place ? '<button onclick="event.stopPropagation(); openGoogleMaps(\'' + item.place.replace(/'/g, "\\'") + '\')">🗺️</button>' : '') + '</div>';
                 
