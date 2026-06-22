@@ -300,7 +300,6 @@
     <div id="toastContainer" class="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-[100] w-full max-w-sm px-4 flex flex-col gap-2 pointer-events-none"></div>
 
     <script>
-        // 💡 [필수 설정] 아래 따옴표 안에 사용하시던 웹 앱 URL을 꼭 그대로 유지해 주세요!
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwEL1vrjyLCsBG2Q9jNfby_pc9W5krm3Ai1Lw3rB2b2lxFvB78KfajyumyMI3Drjm2eMA/exec";
 
         window.onerror = function(message, source, lineno, colno, error) {
@@ -585,7 +584,6 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); showToast("환영합니다, " + currentUsername + "님!"); logUserAccess(currentUsername); }, 300);
         }
 
-        // 💡 [수정] 통신 에러를 완벽하게 추적할 수 있는 가장 안전한 전송 방식(URLSearchParams)
         function logUserAccess(name) {
             if (!SCRIPT_URL || SCRIPT_URL.includes("여기에")) return;
             const params = new URLSearchParams();
@@ -787,7 +785,10 @@
                 
                 sumVND += vndVal; sumKRW += krwVal; sumUSD += usdVal;
                 
-                var placeHTML = item.place ? '<div class="mt-2 text-xs text-gray-700 bg-gray-100 p-1.5 rounded flex justify-between"><span>📍 ' + item.place + '</span><button onclick="openGoogleMaps(\'' + item.place.replace(/'/g, "\\'") + '\')">🗺️</button></div>' : '';
+                // 💡 [수정] 장소 영역에 더블클릭 이벤트(editSavedItem) 추가 및 마우스 커서 스타일 지정
+                var displayPlace = item.place ? item.place : '장소 미입력 (더블클릭하여 수정)';
+                var placeHTML = '<div class="mt-2 text-xs text-gray-700 bg-gray-100 p-1.5 rounded flex justify-between cursor-pointer select-none" title="더블클릭하여 수정" ondblclick="editSavedItem(' + i + ')"><span>📍 ' + displayPlace + '</span>' + (item.place ? '<button onclick="event.stopPropagation(); openGoogleMaps(\'' + item.place.replace(/'/g, "\\'") + '\')">🗺️</button>' : '') + '</div>';
+                
                 var memoHTML = item.memo ? '<div class="mt-1 text-xs text-gray-600 bg-yellow-50 p-1.5 rounded">📝 ' + item.memo + '</div>' : '';
                 
                 var photosHTML = '';
@@ -809,7 +810,6 @@
         }
         function deleteSavedItem(index) { savedCalculations.splice(index, 1); StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations)); renderSavedCalculations(); }
 
-        // 💡 [핵심 수정] 완벽하게 동작하는 URLSearchParams 전송 (에러 내용 표시)
         async function shareSavedHistory() {
             var unsavedVND = document.getElementById('inputVND').value;
             if (unsavedVND && unsavedVND !== '0') {
@@ -986,7 +986,7 @@
         function openGoogleMaps(placeName) {
             var query = placeName || document.getElementById('inputPlace').value.trim();
             if (!query) { showToast("장소가 없습니다.", "error"); return; }
-            window.open("https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(query), '_blank');
+            window.open("https://maps.google.com/?q=" + encodeURIComponent(query), '_blank');
         }
         function fetchCurrentLocation(isAuto) {
             var placeInput = document.getElementById('inputPlace');
@@ -1113,6 +1113,35 @@
                 navigator.serviceWorker.register('./sw.js')
                 .catch(err => console.log('서비스 워커 등록 실패:', err));
             });
+        }
+
+        // 💡 [신설] 임시저장 내역 더블클릭 시 입력 폼으로 데이터를 채우고 팝업을 닫는 함수
+        function editSavedItem(index) {
+            var item = savedCalculations[index];
+            if (!item) return;
+
+            // 1. 전면 입력 필드에 기존 임시저장 데이터 로드 (0값은 공백 처리)
+            document.getElementById('inputVND').value = item.vnd === '0' ? '' : item.vnd;
+            document.getElementById('inputKRW').value = item.krw === '0' ? '' : item.krw;
+            document.getElementById('inputUSD').value = item.usd === '0' ? '' : item.usd;
+            document.getElementById('inputPlace').value = item.place === '장소 미입력 (더블클릭하여 수정)' ? '' : item.place;
+            document.getElementById('inputMemo').value = item.memo;
+            
+            // 사진 리스트 복원 및 렌더링
+            attachedPhotos = JSON.parse(JSON.stringify(item.photos || []));
+            renderAttachedPhotos();
+
+            // 2. 수정 모드로 꺼내왔으므로 기존 임시 목록에서는 중복 낭비를 없애기 위해 제거
+            savedCalculations.splice(index, 1);
+            StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations));
+
+            // 3. 임시내역 모달 창 닫기 (히스토리 역추적 유도)
+            closeSavedModal();
+
+            // 4. 여행이력 메인 탭 화면 활성화
+            changeTab('history');
+
+            showToast("내역을 입력창으로 가져왔습니다. 수정 후 다시 저장해 주세요.", "info");
         }
     </script>
 </body>
