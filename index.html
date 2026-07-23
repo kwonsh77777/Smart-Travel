@@ -315,9 +315,50 @@
         };
 
         var StorageHelper = {
-            get: function(key) { try { return localStorage.getItem(key); } catch(e) { return null; } },
-            set: function(key, val) { try { localStorage.setItem(key, val); } catch(e) {} },
-            remove: function(key) { try { localStorage.removeItem(key); } catch(e) {} }
+            dbPromise: null,
+            init: function() {
+                if (!this.dbPromise) {
+                    this.dbPromise = new Promise(function(resolve, reject) {
+                        try {
+                            var req = indexedDB.open('SmartTravelDB', 1);
+                            req.onupgradeneeded = function(e) { e.target.result.createObjectStore('store'); };
+                            req.onsuccess = function(e) { resolve(e.target.result); };
+                            req.onerror = function(e) { reject(e); };
+                        } catch(err) { reject(err); }
+                    });
+                }
+                return this.dbPromise;
+            },
+            get: async function(key) {
+                try {
+                    var db = await this.init();
+                    return await new Promise(function(resolve, reject) {
+                        var req = db.transaction('store', 'readonly').objectStore('store').get(key);
+                        req.onsuccess = function() { resolve(req.result !== undefined ? req.result : localStorage.getItem(key)); };
+                        req.onerror = function() { resolve(localStorage.getItem(key)); };
+                    });
+                } catch(e) { return localStorage.getItem(key); }
+            },
+            set: async function(key, val) {
+                try {
+                    var db = await this.init();
+                    await new Promise(function(resolve, reject) {
+                        var req = db.transaction('store', 'readwrite').objectStore('store').put(val, key);
+                        req.onsuccess = resolve; req.onerror = reject;
+                    });
+                } catch(e) {}
+                try { localStorage.setItem(key, val); } catch(e) {}
+            },
+            remove: async function(key) {
+                try {
+                    var db = await this.init();
+                    await new Promise(function(resolve, reject) {
+                        var req = db.transaction('store', 'readwrite').objectStore('store').delete(key);
+                        req.onsuccess = resolve; req.onerror = reject;
+                    });
+                } catch(e) {}
+                try { localStorage.removeItem(key); } catch(e) {}
+            }
         };
 
         var exchangeRates = { KRW: 1350, VND: 25000 };
@@ -333,6 +374,7 @@
         
         var recognition = null;
         var isRecognizing = false;
+        var backupFileHandle = null; 
 
         var currentViewerPhotos = [];
         var currentViewerIndex = 0;
@@ -499,13 +541,13 @@
             clockEl.classList.remove('hidden');
         }
 
-        function initApp() {
+        async function initApp() {
             startRealtimeClock();
             
-            var storedRates = StorageHelper.get('offlineCalc_rates');
+            var storedRates = await StorageHelper.get('offlineCalc_rates');
             if (storedRates) try { exchangeRates = JSON.parse(storedRates); } catch(e) {}
             
-            var storedCustom = StorageHelper.get('offlineCalc_custom_currency');
+            var storedCustom = await StorageHelper.get('offlineCalc_custom_currency');
             if (storedCustom) {
                 try {
                     customCurrency = JSON.parse(storedCustom);
@@ -513,17 +555,17 @@
                 } catch(e) {}
             }
 
-            var storedSaves = StorageHelper.get('offlineCalc_saves');
+            var storedSaves = await StorageHelper.get('offlineCalc_saves');
             if (storedSaves) try { savedCalculations = JSON.parse(storedSaves); } catch(e) {}
 
-            var storedUpdateText = StorageHelper.get('offlineCalc_lastUpdate');
+            var storedUpdateText = await StorageHelper.get('offlineCalc_lastUpdate');
             if (storedUpdateText) {
                 lastUpdatedText = storedUpdateText;
                 document.getElementById('headerLastUpdate').innerText = lastUpdatedText;
                 document.getElementById('lastUpdateText').innerText = "최근 업데이트: " + lastUpdatedText;
             }
 
-            var storedFileName = StorageHelper.get('offlineCalc_lastFileName');
+            var storedFileName = await StorageHelper.get('offlineCalc_lastFileName');
             if (storedFileName) {
                 var backupFileInput = document.getElementById('backupFileName');
                 if (backupFileInput) backupFileInput.value = storedFileName;
@@ -533,7 +575,7 @@
             updateCurrencyLabels();
             setTimeout(function() { fetchCurrentLocation(true); }, 1000);
 
-            var storedUsername = StorageHelper.get('offlineCalc_username');
+            var storedUsername = await StorageHelper.get('offlineCalc_username');
             if (storedUsername) {
                 currentUsername = storedUsername;
                 logUserAccess(currentUsername); 
@@ -648,10 +690,10 @@
             setTimeout(function() { modal.classList.remove('opacity-0'); content.classList.remove('scale-95'); content.classList.add('scale-100'); }, 10);
         }
         
-        function saveUsername() {
+        async function saveUsername() {
             var name = document.getElementById('inputUsername').value.trim();
             if (!name) { showToast("이름을 입력해주세요.", "error"); return; }
-            currentUsername = name; StorageHelper.set('offlineCalc_username', currentUsername);
+            currentUsername = name; await StorageHelper.set('offlineCalc_username', currentUsername);
             var modal = document.getElementById('userModal'); var content = document.getElementById('userModalContent');
             modal.classList.add('opacity-0'); content.classList.remove('scale-100'); content.classList.add('scale-95');
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); showToast("환영합니다, " + currentUsername + "님!"); logUserAccess(currentUsername); }, 300);
@@ -682,13 +724,13 @@
                     lastUpdatedText = now.getFullYear() + '.' + String(now.getMonth() + 1).padStart(2, '0') + '.' + String(now.getDate()).padStart(2, '0') + '(' + days[now.getDay()] + ') ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
                     document.getElementById('lastUpdateText').innerText = "최근 업데이트: " + lastUpdatedText;
                     document.getElementById('headerLastUpdate').innerText = lastUpdatedText;
-                    StorageHelper.set('offlineCalc_lastUpdate', lastUpdatedText);
+                    await StorageHelper.set('offlineCalc_lastUpdate', lastUpdatedText);
                     showToast("최신 환율을 가져왔습니다. 적용/저장을 눌러주세요.");
                 }
             } catch (error) { showToast("인터넷 연결을 확인해주세요.", "error"); }
         }
 
-        function applySettings() {
+        async function applySettings() {
             var valKRW = parseFloat(document.getElementById('settingKRW').value);
             var valVND = parseFloat(document.getElementById('settingVND').value);
             var select = document.getElementById('settingCurrencySelect');
@@ -696,8 +738,8 @@
             if (!valKRW || !valVND) { showToast("환율을 모두 입력해주세요.", "error"); return; }
             exchangeRates.KRW = valKRW; exchangeRates.VND = valVND;
             customCurrency.name = info.name; customCurrency.symbol = info.symbol; customCurrency.code = selectedCode; currentCurrencyCode = selectedCode;
-            StorageHelper.set('offlineCalc_rates', JSON.stringify(exchangeRates));
-            StorageHelper.set('offlineCalc_custom_currency', JSON.stringify(customCurrency));
+            await StorageHelper.set('offlineCalc_rates', JSON.stringify(exchangeRates));
+            await StorageHelper.set('offlineCalc_custom_currency', JSON.stringify(customCurrency));
             updateCurrencyLabels();
             showToast("환율 설정이 기기에 저장되었습니다.");
             changeTab('history'); 
@@ -751,8 +793,8 @@
             setTimeout(function() { modal.classList.add('hidden'); modal.classList.remove('flex'); }, 300);
         }
         
-        function executeNewSession() {
-            savedCalculations = []; StorageHelper.remove('offlineCalc_saves');
+        async function executeNewSession() {
+            savedCalculations = []; await StorageHelper.remove('offlineCalc_saves');
             document.getElementById('inputVND').value = ''; document.getElementById('inputKRW').value = ''; document.getElementById('inputUSD').value = '';
             document.getElementById('inputPlace').value = ''; document.getElementById('inputMemo').value = '';
             attachedPhotos = []; renderAttachedPhotos(); closeNewSessionModal();
@@ -797,7 +839,7 @@
         }
         function removePhoto(index) { attachedPhotos.splice(index, 1); renderAttachedPhotos(); }
 
-        function saveCurrentCalculation() {
+        async function saveCurrentCalculation() {
             var valVND = document.getElementById('inputVND').value || '0'; 
             var valKRW = document.getElementById('inputKRW').value || '0'; 
             var valUSD = document.getElementById('inputUSD').value || '0';
@@ -807,7 +849,7 @@
             var dateStr = now.getFullYear() + '.' + String(now.getMonth() + 1).padStart(2, '0') + '.' + String(now.getDate()).padStart(2, '0') + ' ' + String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
             
             savedCalculations.push({ date: dateStr, vnd: valVND, krw: valKRW, usd: valUSD, place: place, memo: memo, photos: attachedPhotos, customName: customCurrency.name, customSymbol: customCurrency.symbol });
-            StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations));
+            await StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations));
             showToast("현재 내역이 기기에 저장되었습니다.");
             document.getElementById('inputVND').value = ''; document.getElementById('inputKRW').value = ''; document.getElementById('inputUSD').value = ''; document.getElementById('inputPlace').value = ''; document.getElementById('inputMemo').value = '';
             attachedPhotos = []; renderAttachedPhotos(); fetchCurrentLocation(true);
@@ -882,12 +924,17 @@
             document.getElementById('sumKRW').innerText = '₩ ' + sumKRW.toLocaleString('en-US'); 
             document.getElementById('sumUSD').innerText = '$ ' + sumUSD.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         }
-        function deleteSavedItem(index) { savedCalculations.splice(index, 1); StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations)); renderSavedCalculations(); }
+        
+        async function deleteSavedItem(index) { 
+            savedCalculations.splice(index, 1); 
+            await StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations)); 
+            renderSavedCalculations(); 
+        }
 
         async function shareSavedHistory() {
             var unsavedVND = document.getElementById('inputVND').value;
             if (unsavedVND && unsavedVND !== '0') {
-                saveCurrentCalculation();
+                await saveCurrentCalculation();
                 renderSavedCalculations(); 
             }
 
@@ -933,7 +980,7 @@
             if (failCount === 0) { 
                 showToast("✅ " + successCount + "건 동기화 성공!"); 
                 savedCalculations=[]; 
-                StorageHelper.remove('offlineCalc_saves'); 
+                await StorageHelper.remove('offlineCalc_saves'); 
                 renderSavedCalculations(); 
             } else {
                 showToast("⚠️ 실패 원인: " + errorMessage, "error");
@@ -1024,7 +1071,7 @@
             });
         }
 
-        function importSelectedServerData() {
+        async function importSelectedServerData() {
             if (!fetchedServerData || fetchedServerData.length === 0) return;
             
             var addedCount = 0;
@@ -1047,7 +1094,7 @@
                 return a.date > b.date ? 1 : -1;
             });
 
-            StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations));
+            await StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations));
             
             var msg = "✅ 구글 시트에서 " + addedCount + "건의 내역을 성공적으로 가져왔습니다!";
             if (duplicateCount > 0) msg += " (중복 " + duplicateCount + "건 제외)";
@@ -1074,18 +1121,29 @@
             if (!isAuto) showToast("위치 확인 중...", "info");
 
             navigator.geolocation.getCurrentPosition(async function(pos) {
+                var lat = pos.coords.latitude;
+                var lon = pos.coords.longitude;
                 try {
                     var apiKey = "AIzaSyDZUQgdpvOMVW9qlRu7i5K8SXi6DP7RyDY";
-                    var url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=" + pos.coords.latitude + "," + pos.coords.longitude + "&language=ko&key=" + apiKey;
+                    var url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=" + lat + "," + lon + "&language=ko&key=" + apiKey;
                     var res = await fetch(url);
-                    if (res.ok) { 
-                        var data = await res.json(); 
-                        if (data.status === "OK" && data.results && data.results.length > 0) {
-                            placeInput.value = data.results[0].formatted_address; 
-                            if (!isAuto) showToast("위치 갱신 완료!");
+                    var data = await res.json();
+                    
+                    if (data.status === "OK" && data.results && data.results.length > 0) {
+                        placeInput.value = data.results[0].formatted_address; 
+                        if (!isAuto) showToast("위치 갱신 완료!");
+                    } else {
+                        // 구글 API 거부 시 (Geocoding API 미활성화 등) 무료 대체 API 자동 호출
+                        console.warn("구글 API 거부됨, 대체 API로 우회합니다.", data.error_message || data.status);
+                        var fallbackRes = await fetch("https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=" + lat + "&longitude=" + lon + "&localityLanguage=ko");
+                        if (fallbackRes.ok) {
+                            var fallbackData = await fallbackRes.json();
+                            // 국가, 도/시, 구/동 등의 데이터를 합쳐서 주소 생성
+                            var addressStr = [fallbackData.principalSubdivision, fallbackData.locality, fallbackData.name].filter(Boolean).join(" ");
+                            placeInput.value = addressStr || "위치확인됨";
+                            if (!isAuto) showToast("대체 API로 주소 갱신 완료", "info");
                         } else {
-                            placeInput.value = "위치 확인 실패";
-                            if (!isAuto) showToast("주소 확인 실패: " + (data.error_message || data.status), "error");
+                            placeInput.value = "위치: " + lat.toFixed(4) + ", " + lon.toFixed(4); // 최후의 보루 좌표 출력
                         }
                     }
                 } catch(e) {
@@ -1181,29 +1239,55 @@
             setTimeout(() => { toast.classList.add('translate-y-10', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 3000);
         }
 
-        function exportDataToFile() {
+        async function exportDataToFile() {
             var fileName = document.getElementById('backupFileName').value.trim() || "여행이력_백업";
-            StorageHelper.set('offlineCalc_lastFileName', fileName);
+            await StorageHelper.set('offlineCalc_lastFileName', fileName);
             var dataStr = JSON.stringify({ rates: exchangeRates, saves: savedCalculations, custom: customCurrency });
-            var blob = new Blob([dataStr], { type: "text/plain" }); var url = URL.createObjectURL(blob);
-            var a = document.createElement('a'); a.href = url; a.download = fileName + '.txt';
-            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            
+            try {
+                if (window.showSaveFilePicker) {
+                    // 파일명이 바뀌었거나, 기존에 기억해둔 핸들이 없으면 새로 선택창 띄우기
+                    if (!backupFileHandle || backupFileHandle.name !== fileName + '.txt') {
+                        backupFileHandle = await window.showSaveFilePicker({
+                            suggestedName: fileName + '.txt',
+                            types: [{ description: 'Text file', accept: {'text/plain': ['.txt']} }]
+                        });
+                    }
+                    
+                    // 기억해둔 핸들(권한)을 이용해 팝업 없이 동일 파일에 조용히 덮어쓰기
+                    var writable = await backupFileHandle.createWritable();
+                    await writable.write(dataStr);
+                    await writable.close();
+                    showToast("✅ [" + backupFileHandle.name + "]에 데이터가 안전하게 덮어쓰기 되었습니다.");
+                } else {
+                    // 미지원 환경 오류 발생시켜서 기존 방식으로 폴백
+                    throw new Error("API_NOT_SUPPORTED");
+                }
+            } catch (error) {
+                if (error.name !== 'AbortError') {
+                    // 앱스스크립트 제약 또는 모바일 환경의 경우 무조건 다운로드 처리 (보안 정책)
+                    var blob = new Blob([dataStr], { type: "text/plain" }); var url = URL.createObjectURL(blob);
+                    var a = document.createElement('a'); a.href = url; a.download = fileName + '.txt';
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+                    showToast("파일이 다운로드 되었습니다. (모바일/보안 제약)");
+                }
+            }
         }
         
         function importDataFromFile(event) {
             var file = event.target.files[0]; if (!file) return;
             var reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 try {
                     var data = JSON.parse(e.target.result);
                     if (data.rates && data.saves) {
                         exchangeRates = data.rates; savedCalculations = data.saves; if(data.custom) customCurrency = data.custom;
-                        StorageHelper.set('offlineCalc_rates', JSON.stringify(exchangeRates)); StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations));
-                        if(data.custom) StorageHelper.set('offlineCalc_custom_currency', JSON.stringify(customCurrency));
+                        await StorageHelper.set('offlineCalc_rates', JSON.stringify(exchangeRates)); await StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations));
+                        if(data.custom) await StorageHelper.set('offlineCalc_custom_currency', JSON.stringify(customCurrency));
                         updateCurrencyLabels(); 
                         var nameWithoutExt = file.name.replace(/\.(json|txt)$/i, '');
                         document.getElementById('backupFileName').value = nameWithoutExt;
-                        StorageHelper.set('offlineCalc_lastFileName', nameWithoutExt);
+                        await StorageHelper.set('offlineCalc_lastFileName', nameWithoutExt);
                         renderSavedCalculations(); showToast("✅ 파일을 성공적으로 불러왔습니다!");
                     } else { showToast("올바른 여행이력 백업 파일이 아닙니다.", "error"); }
                 } catch (err) { showToast("오류 발생", "error"); }
@@ -1212,7 +1296,7 @@
             reader.readAsText(file);
         }
 
-        function editSavedItem(index) {
+        async function editSavedItem(index) {
             var item = savedCalculations[index];
             if (!item) return;
 
@@ -1226,7 +1310,7 @@
             renderAttachedPhotos();
 
             savedCalculations.splice(index, 1);
-            StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations));
+            await StorageHelper.set('offlineCalc_saves', JSON.stringify(savedCalculations));
 
             closeSavedModal();
             changeTab('history');
