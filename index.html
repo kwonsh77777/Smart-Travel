@@ -1124,6 +1124,7 @@
                 var lat = pos.coords.latitude;
                 var lon = pos.coords.longitude;
                 try {
+                    // 1순위: Google API
                     var apiKey = "AIzaSyDZUQgdpvOMVW9qlRu7i5K8SXi6DP7RyDY";
                     var url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=" + lat + "," + lon + "&language=ko&key=" + apiKey;
                     var res = await fetch(url);
@@ -1132,22 +1133,46 @@
                     if (data.status === "OK" && data.results && data.results.length > 0) {
                         placeInput.value = data.results[0].formatted_address; 
                         if (!isAuto) showToast("위치 갱신 완료!");
-                    } else {
-                        // 구글 API 거부 시 (Geocoding API 미활성화 등) 무료 대체 API 자동 호출
-                        console.warn("구글 API 거부됨, 대체 API로 우회합니다.", data.error_message || data.status);
-                        var fallbackRes = await fetch("https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=" + lat + "&longitude=" + lon + "&localityLanguage=ko");
-                        if (fallbackRes.ok) {
-                            var fallbackData = await fallbackRes.json();
-                            // 국가, 도/시, 구/동 등의 데이터를 합쳐서 주소 생성
-                            var addressStr = [fallbackData.principalSubdivision, fallbackData.locality, fallbackData.name].filter(Boolean).join(" ");
-                            placeInput.value = addressStr || "위치확인됨";
-                            if (!isAuto) showToast("대체 API로 주소 갱신 완료", "info");
-                        } else {
-                            placeInput.value = "위치: " + lat.toFixed(4) + ", " + lon.toFixed(4); // 최후의 보루 좌표 출력
+                        return;
+                    } 
+                    
+                    // 2순위: OpenStreetMap API (Google 실패 시)
+                    try {
+                        var osmRes = await fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat=" + lat + "&lon=" + lon + "&accept-language=ko");
+                        if (osmRes.ok) {
+                            var osmData = await osmRes.json();
+                            if (osmData.display_name) {
+                                placeInput.value = osmData.display_name;
+                                if (!isAuto) showToast("대체 API(OSM)로 주소 갱신 완료", "info");
+                                return;
+                            }
                         }
-                    }
+                    } catch(osmErr) {}
+
+                    // 3순위: BigDataCloud API (OSM 실패 시)
+                    try {
+                        var fbRes = await fetch("https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=" + lat + "&longitude=" + lon + "&localityLanguage=ko");
+                        if (fbRes.ok) {
+                            var fb = await fbRes.json();
+                            var addrParts = [fb.countryName, fb.principalSubdivision, fb.city, fb.locality];
+                            var addressStr = addrParts.filter(function(item, pos, self) {
+                                return item && self.indexOf(item) == pos; // 중복제거 및 빈값 필터링
+                            }).join(" ");
+                            
+                            if (addressStr.trim() !== "") {
+                                placeInput.value = addressStr;
+                                if (!isAuto) showToast("대체 API(BDC)로 주소 갱신 완료", "info");
+                                return;
+                            }
+                        }
+                    } catch(fbErr) {}
+
+                    // 4순위: 모든 API 실패 시 (빈값 방지를 위해 정확한 위경도 좌표 표시)
+                    placeInput.value = "📍 좌표: " + lat.toFixed(5) + ", " + lon.toFixed(5);
+                    if (!isAuto) showToast("주소 변환 불가, 좌표로 표시합니다.", "warning");
+
                 } catch(e) {
-                    placeInput.value = "위치 통신 오류";
+                    placeInput.value = "위치 통신 오류 (" + lat.toFixed(4) + ", " + lon.toFixed(4) + ")";
                 }
             }, function(error){
                 if (error.code === error.PERMISSION_DENIED) {
