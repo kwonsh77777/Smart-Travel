@@ -1065,24 +1065,43 @@
 
         function fetchCurrentLocation(isAuto) {
             var placeInput = document.getElementById('inputPlace');
-            if (!navigator.geolocation) return;
+            if (!navigator.geolocation) {
+                if (!isAuto) showToast("위치 정보를 지원하지 않는 환경입니다.", "error");
+                return;
+            }
             if (isAuto === true && placeInput.value.trim() !== "") return;
+
+            if (!isAuto) showToast("위치 확인 중...", "info");
+
             navigator.geolocation.getCurrentPosition(async function(pos) {
                 try {
-                    // [수정] 제공해주신 Google API 키를 활용하여 빠르고 정확한 Google Maps Geocoding API로 변경 (GitHub Pages 환경 최적화)
                     var apiKey = "AIzaSyDZUQgdpvOMVW9qlRu7i5K8SXi6DP7RyDY";
                     var url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=" + pos.coords.latitude + "," + pos.coords.longitude + "&language=ko&key=" + apiKey;
                     var res = await fetch(url);
                     if (res.ok) { 
                         var data = await res.json(); 
-                        if (data.results && data.results.length > 0) {
+                        if (data.status === "OK" && data.results && data.results.length > 0) {
                             placeInput.value = data.results[0].formatted_address; 
+                            if (!isAuto) showToast("위치 갱신 완료!");
                         } else {
-                            placeInput.value = "위치확인됨";
+                            placeInput.value = "위치 확인 실패";
+                            if (!isAuto) showToast("주소 확인 실패: " + (data.error_message || data.status), "error");
                         }
                     }
-                } catch(e) {}
-            }, function(){}, { timeout: 5000 });
+                } catch(e) {
+                    placeInput.value = "위치 통신 오류";
+                }
+            }, function(error){
+                if (error.code === error.PERMISSION_DENIED) {
+                    placeInput.value = "위치 권한 거부됨";
+                    if (!isAuto) showToast("스마트폰/브라우저의 위치 권한을 허용해주세요.", "error");
+                } else if (error.code === error.TIMEOUT) {
+                    placeInput.value = "위치 확인 시간 초과";
+                    if (!isAuto) showToast("위치 확인 시간 초과 (GPS 신호 약함)", "error");
+                } else {
+                    placeInput.value = "위치 알 수 없음";
+                }
+            }, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
         }
 
         function openGalleryViewer(sourceType, itemIndex, photoIndex) {
