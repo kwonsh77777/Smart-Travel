@@ -1118,62 +1118,70 @@
             }
             if (isAuto === true && placeInput.value.trim() !== "") return;
 
-            if (!isAuto) showToast("위치 확인 중...", "info");
+            if (!isAuto) showToast("위치 상세 주소 확인 중...", "info");
 
             navigator.geolocation.getCurrentPosition(async function(pos) {
                 var lat = pos.coords.latitude;
                 var lon = pos.coords.longitude;
+                var bestAddress = "";
+                var isGoogleSuccess = false;
+
+                // 1순위: Google Maps API
                 try {
-                    // 1순위: Google API
                     var apiKey = "AIzaSyDZUQgdpvOMVW9qlRu7i5K8SXi6DP7RyDY";
                     var url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=" + lat + "," + lon + "&language=ko&key=" + apiKey;
                     var res = await fetch(url);
                     var data = await res.json();
                     
                     if (data.status === "OK" && data.results && data.results.length > 0) {
-                        placeInput.value = data.results[0].formatted_address; 
-                        if (!isAuto) showToast("위치 갱신 완료!");
-                        return;
-                    } 
-                    
-                    // 2순위: OpenStreetMap API (Google 실패 시)
+                        bestAddress = data.results[0].formatted_address.replace("대한민국 ", "");
+                        isGoogleSuccess = true;
+                    }
+                } catch(e) { console.error("Google API Error", e); }
+
+                // 2순위: OpenStreetMap (Google이 실패했거나, 가져온 주소에 번지수(숫자)가 없어 상세하지 않은 경우 발동)
+                if (!isGoogleSuccess || !/\d/.test(bestAddress)) {
                     try {
-                        var osmRes = await fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat=" + lat + "&lon=" + lon + "&accept-language=ko");
+                        var osmRes = await fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" + lat + "&lon=" + lon + "&zoom=18&addressdetails=1&accept-language=ko");
                         if (osmRes.ok) {
                             var osmData = await osmRes.json();
-                            if (osmData.display_name) {
-                                placeInput.value = osmData.display_name;
-                                if (!isAuto) showToast("대체 API(OSM)로 주소 갱신 완료", "info");
-                                return;
+                            if (osmData.address) {
+                                var a = osmData.address;
+                                // 한국형 상세 주소 조립 (도, 시, 구, 동/읍/면, 도로명, 번지, 건물명)
+                                var parts = [a.province, a.city, a.county, a.town, a.borough, a.suburb, a.village, a.local_area, a.neighbourhood, a.road, a.house_number, a.name];
+                                var osmAddr = parts.filter(function(item, pos, self) { return item && self.indexOf(item) == pos; }).join(" ");
+                                
+                                if (osmAddr.length > bestAddress.length) {
+                                    bestAddress = osmAddr.trim(); // 더 상세한 주소로 덮어쓰기
+                                }
                             }
                         }
-                    } catch(osmErr) {}
+                    } catch(e) { console.error("OSM API Error", e); }
+                }
 
-                    // 3순위: BigDataCloud API (OSM 실패 시)
+                // 3순위: BigDataCloud (최후의 주소 보루)
+                if (bestAddress.trim() === "" || (!/\d/.test(bestAddress) && bestAddress.split(" ").length <= 2)) {
                     try {
                         var fbRes = await fetch("https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=" + lat + "&longitude=" + lon + "&localityLanguage=ko");
                         if (fbRes.ok) {
                             var fb = await fbRes.json();
-                            var addrParts = [fb.countryName, fb.principalSubdivision, fb.city, fb.locality];
-                            var addressStr = addrParts.filter(function(item, pos, self) {
-                                return item && self.indexOf(item) == pos; // 중복제거 및 빈값 필터링
-                            }).join(" ");
-                            
-                            if (addressStr.trim() !== "") {
-                                placeInput.value = addressStr;
-                                if (!isAuto) showToast("대체 API(BDC)로 주소 갱신 완료", "info");
-                                return;
+                            var fbAddr = [fb.principalSubdivision, fb.city, fb.locality].filter(function(item, pos, self) { return item && self.indexOf(item) == pos; }).join(" ");
+                            if (fbAddr.length > bestAddress.length) {
+                                bestAddress = fbAddr.trim();
                             }
                         }
-                    } catch(fbErr) {}
-
-                    // 4순위: 모든 API 실패 시 (빈값 방지를 위해 정확한 위경도 좌표 표시)
-                    placeInput.value = "📍 좌표: " + lat.toFixed(5) + ", " + lon.toFixed(5);
-                    if (!isAuto) showToast("주소 변환 불가, 좌표로 표시합니다.", "warning");
-
-                } catch(e) {
-                    placeInput.value = "위치 통신 오류 (" + lat.toFixed(4) + ", " + lon.toFixed(4) + ")";
+                    } catch(e) { console.error("BDC API Error", e); }
                 }
+
+                // 최종 출력
+                if (bestAddress.trim() !== "") {
+                    placeInput.value = bestAddress;
+                    if (!isAuto) showToast("상세 위치 갱신 완료!");
+                } else {
+                    placeInput.value = "📍 좌표: " + lat.toFixed(5) + ", " + lon.toFixed(5);
+                    if (!isAuto) showToast("상세 주소 확인 불가, 좌표로 표시합니다.", "warning");
+                }
+
             }, function(error){
                 if (error.code === error.PERMISSION_DENIED) {
                     placeInput.value = "위치 권한 거부됨";
