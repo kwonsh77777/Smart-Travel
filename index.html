@@ -1147,21 +1147,19 @@
 
                 // 2순위: OpenStreetMap (구글이 읍/면/동까지만 줬을 경우, 더 상세한 데이터 추적)
                 try {
-                    var osmRes = await fetch("https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=" + lat + "&lon=" + lon + "&zoom=18&addressdetails=1&accept-language=ko");
+                    // 기존 방식의 URL 파라미터 복구 및 원본 display_name 직접 사용
+                    var osmRes = await fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat=" + lat + "&lon=" + lon);
                     if (osmRes.ok) {
                         var osmData = await osmRes.json();
                         if (osmData.display_name) {
-                            // OSM은 '12, 도로명, 읍면동...' 순서이므로 역순으로 한국식 조합
-                            var parts = osmData.display_name.split(",").map(function(s) { return s.trim(); });
-                            parts.reverse();
-                            var krAddr = parts.filter(function(p) { return p !== "대한민국" && !/^\d{5}$/.test(p); }).join(" ");
+                            var osmAddr = osmData.display_name; // 역순 조립 등 필터링 없이 기존 방식 그대로 콤마(,) 포함 출력
                             
-                            if (krAddr.length > bestAddress.length || hasDetail(krAddr)) {
-                                bestAddress = krAddr.trim();
+                            if (osmAddr.length > bestAddress.length || hasDetail(osmAddr)) {
+                                bestAddress = osmAddr.trim();
                             }
                             if (hasDetail(bestAddress)) {
                                 placeInput.value = bestAddress;
-                                if (!isAuto) showToast("상세 주소 갱신 완료!");
+                                if (!isAuto) showToast("위치 갱신 완료!");
                                 return;
                             }
                         }
