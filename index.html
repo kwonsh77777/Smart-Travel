@@ -433,7 +433,6 @@
             updateClock(); setInterval(updateClock, 1000);
         }
 
-        // 💡 [수정] 수동 모드로 진입 시 이미 지정된 시간이 있다면 불러오고, [확인] 버튼을 노출하도록 보완
         function switchToManualClock() {
             var clockEl = document.getElementById('realtimeClock');
             var inputEl = document.getElementById('manualClockInput');
@@ -453,7 +452,6 @@
             inputEl.focus();
         }
 
-        // 💡 [신설] 사용자가 날짜/시간 입력을 완전히 완료하고 버튼을 누를 때만 파싱하여 수동으로 확정하는 기능
         function saveManualClock(event) {
             if (event) event.stopPropagation();
             var inputEl = document.getElementById('manualClockInput');
@@ -1064,14 +1062,25 @@
             if (!query) { showToast("장소가 없습니다.", "error"); return; }
             window.open("https://maps.google.com/?q=" + encodeURIComponent(query), '_blank');
         }
+
         function fetchCurrentLocation(isAuto) {
             var placeInput = document.getElementById('inputPlace');
             if (!navigator.geolocation) return;
             if (isAuto === true && placeInput.value.trim() !== "") return;
             navigator.geolocation.getCurrentPosition(async function(pos) {
                 try {
-                    var res = await fetch("https://nominatim.openstreetmap.org/reverse?format=json&lat=" + pos.coords.latitude + "&lon=" + pos.coords.longitude);
-                    if (res.ok) { var data = await res.json(); placeInput.value = data.display_name || "위치확인됨"; }
+                    // [수정] 제공해주신 Google API 키를 활용하여 빠르고 정확한 Google Maps Geocoding API로 변경 (GitHub Pages 환경 최적화)
+                    var apiKey = "AIzaSyDZUQgdpvOMVW9qlRu7i5K8SXi6DP7RyDY";
+                    var url = "https://maps.googleapis.com/maps/api/geocode/json?latlng=" + pos.coords.latitude + "," + pos.coords.longitude + "&language=ko&key=" + apiKey;
+                    var res = await fetch(url);
+                    if (res.ok) { 
+                        var data = await res.json(); 
+                        if (data.results && data.results.length > 0) {
+                            placeInput.value = data.results[0].formatted_address; 
+                        } else {
+                            placeInput.value = "위치확인됨";
+                        }
+                    }
                 } catch(e) {}
             }, function(){}, { timeout: 5000 });
         }
